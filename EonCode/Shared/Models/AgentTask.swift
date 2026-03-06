@@ -89,19 +89,74 @@ struct AgentStep: Identifiable, Codable, Equatable {
     var startedAt: Date?
     var completedAt: Date?
     var tokensUsed: Int
+    var ranLocally: Bool        // true = ran on this device, false = queued to Mac
+    var workerID: UUID?         // set when run by a parallel worker
 
-    init(id: UUID = UUID(), taskID: UUID, index: Int, action: AgentAction) {
+    init(id: UUID = UUID(), taskID: UUID, index: Int, action: AgentAction, ranLocally: Bool = true) {
         self.id = id
         self.taskID = taskID
         self.index = index
         self.action = action
         self.status = .pending
         self.tokensUsed = 0
+        self.ranLocally = ranLocally
     }
 
     static func == (lhs: AgentStep, rhs: AgentStep) -> Bool {
         lhs.id == rhs.id
     }
+}
+
+// MARK: - Agent mode (iOS Autonomous vs Remote-only)
+
+enum AgentMode: String, Codable, CaseIterable {
+    case autonomous   // iOS does what it can; queues the rest
+    case remoteOnly   // Queue everything to Mac
+
+    var displayName: String {
+        switch self {
+        case .autonomous: return "Autonom"
+        case .remoteOnly: return "Remote"
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .autonomous: return "iOS gör allt den kan. Terminkommandon köas till Mac."
+        case .remoteOnly: return "Alla instruktioner skickas till Mac."
+        }
+    }
+}
+
+// MARK: - Worker task (for parallel execution)
+
+struct WorkerTask: Identifiable, Codable {
+    var id: UUID = UUID()
+    var description: String
+    var instruction: String
+    var requiresTerminal: Bool
+    var dependsOn: [UUID]   // IDs of tasks that must complete first
+    var waveIndex: Int
+    var status: StepStatus = .pending
+    var result: String?
+    var ranLocally: Bool = false
+}
+
+struct TaskWave: Codable {
+    var index: Int
+    var description: String
+    var tasks: [WorkerTask]
+    var dependsOnWave: Int?
+}
+
+struct WorkerResult: Identifiable {
+    let id: UUID
+    let taskID: UUID
+    let output: String
+    let filesWritten: [String]
+    let succeeded: Bool
+    let ranLocally: Bool
+    let durationSeconds: Double
 }
 
 enum StepStatus: String, Codable, Equatable {

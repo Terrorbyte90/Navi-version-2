@@ -25,9 +25,13 @@ struct SettingsView: View {
                 .tabItem { Label("API-nycklar", systemImage: "key") }
                 .padding()
 
-            modelSection
-                .tabItem { Label("Modell", systemImage: "cpu") }
-                .padding()
+            VStack(alignment: .leading, spacing: 20) {
+                modelSection
+                Divider().opacity(0.2)
+                parallelWorkersSection
+            }
+            .padding()
+            .tabItem { Label("Modell", systemImage: "cpu") }
 
             syncSection
                 .tabItem { Label("Synk", systemImage: "arrow.triangle.2.circlepath") }
@@ -46,6 +50,8 @@ struct SettingsView: View {
         Form {
             Section("API-nycklar") { apiKeysSection }
             Section("Claude-modell") { modelSection }
+            Section("iOS Agent-läge") { iOSAgentModeSection }
+            Section("Parallella workers") { parallelWorkersSection }
             Section("Synk") { syncSection }
             Section("Röst (ElevenLabs)") {
                 Toggle("Aktivera text-till-tal", isOn: $settings.ttsEnabled)
@@ -56,6 +62,64 @@ struct SettingsView: View {
         .background(Color.chatBackground)
         .scrollContentBackground(.hidden)
         .preferredColorScheme(.dark)
+    }
+
+    var iOSAgentModeSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Picker("Läge", selection: $settings.iosAgentMode) {
+                Text("Autonom").tag(AgentMode.autonomous)
+                Text("Remote").tag(AgentMode.remoteOnly)
+            }
+            .pickerStyle(.segmented)
+
+            Group {
+                if settings.iosAgentMode == .autonomous {
+                    Label(
+                        "iOS kör fil-operationer direkt. Terminal-kommandon köas automatiskt till Mac.",
+                        systemImage: "iphone"
+                    )
+                } else {
+                    Label(
+                        "Alla instruktioner köas till Mac. iOS agerar som fjärrkontroll.",
+                        systemImage: "desktopcomputer"
+                    )
+                }
+            }
+            .font(.system(size: 12))
+            .foregroundColor(.secondary)
+        }
+    }
+
+    var parallelWorkersSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Toggle("Aktivera parallella workers", isOn: $settings.parallelAgentsEnabled)
+
+            if settings.parallelAgentsEnabled {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Text("Max workers: \(settings.maxParallelWorkers)")
+                            .font(.system(size: 13))
+                        Spacer()
+                        Text("2–10")
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary)
+                    }
+                    Slider(
+                        value: Binding(
+                            get: { Double(settings.maxParallelWorkers) },
+                            set: { settings.maxParallelWorkers = Int($0) }
+                        ),
+                        in: 2...10,
+                        step: 1
+                    )
+                    .tint(.accentEon)
+                }
+
+                Text("Komplexa uppgifter delas upp i parallella deluppgifter. Fler workers = snabbare men fler API-anrop.")
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary.opacity(0.7))
+            }
+        }
     }
 
     var apiKeysSection: some View {

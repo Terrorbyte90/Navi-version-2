@@ -92,6 +92,15 @@ final class SettingsStore: ObservableObject {
     @Published var macServerURL: String {
         didSet { save("macServerURL", value: macServerURL) }
     }
+    @Published var iosAgentMode: AgentMode {
+        didSet { save("iosAgentMode", value: iosAgentMode.rawValue) }
+    }
+    @Published var maxParallelWorkers: Int {
+        didSet { save("maxParallelWorkers", value: maxParallelWorkers) }
+    }
+    @Published var parallelAgentsEnabled: Bool {
+        didSet { save("parallelAgentsEnabled", value: parallelAgentsEnabled) }
+    }
 
     private let defaults = UserDefaults.standard
 
@@ -103,6 +112,9 @@ final class SettingsStore: ObservableObject {
         agentConfirmDestructive = UserDefaults.standard.value(forKey: "agentConfirmDestructive") as? Bool ?? true
         iCloudDefaultFolder = UserDefaults.standard.string(forKey: "iCloudDefaultFolder")
         macServerURL = UserDefaults.standard.string(forKey: "macServerURL") ?? ""
+        iosAgentMode = AgentMode(rawValue: UserDefaults.standard.string(forKey: "iosAgentMode") ?? "") ?? .autonomous
+        maxParallelWorkers = UserDefaults.standard.integer(forKey: "maxParallelWorkers").nonZero ?? 4
+        parallelAgentsEnabled = UserDefaults.standard.value(forKey: "parallelAgentsEnabled") as? Bool ?? true
     }
 
     private func save(_ key: String, value: Any?) {

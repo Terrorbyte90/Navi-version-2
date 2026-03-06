@@ -2,6 +2,7 @@ import SwiftUI
 
 struct AgentStatusView: View {
     @ObservedObject var agent: ProjectAgent
+    @ObservedObject private var orchestrator = OrchestratorAgent.shared
     @State private var expandedSteps = Set<UUID>()
 
     var body: some View {
@@ -19,11 +20,11 @@ struct AgentStatusView: View {
 
                     Spacer()
 
-                    if agent.isRunning {
+                    if agent.isRunning || orchestrator.isRunning {
                         HStack(spacing: 6) {
                             ProgressView()
                                 .scaleEffect(0.7)
-                            Text("Kör")
+                            Text(orchestrator.isRunning ? "Orchestrator" : "Kör")
                                 .font(.system(size: 12, weight: .medium))
                                 .foregroundColor(.green)
                         }
@@ -35,6 +36,16 @@ struct AgentStatusView: View {
                 }
 
                 Divider().opacity(0.2)
+
+                // Orchestrator wave progress
+                if orchestrator.isRunning && orchestrator.totalWaves > 0 {
+                    OrchestratorProgressView(orchestrator: orchestrator)
+                }
+
+                // Worker statuses
+                if orchestrator.isRunning && !orchestrator.workerStatuses.isEmpty {
+                    WorkerStatusListView(statuses: orchestrator.workerStatuses)
+                }
 
                 // Current status
                 if !agent.currentStatus.isEmpty {
@@ -97,6 +108,121 @@ struct AgentStatusView: View {
             .padding()
         }
         .background(Color.chatBackground)
+    }
+}
+
+// MARK: - Orchestrator wave progress
+
+struct OrchestratorProgressView: View {
+    @ObservedObject var orchestrator: OrchestratorAgent
+
+    var body: some View {
+        GlassCard(cornerRadius: 12, padding: 12) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Image(systemName: "cpu.fill")
+                        .foregroundColor(.accentEon)
+                        .font(.system(size: 13))
+                    Text("Orchestrator — Våg \(orchestrator.currentWave + 1)/\(orchestrator.totalWaves)")
+                        .font(.system(size: 13, weight: .semibold))
+                    Spacer()
+                    Text("\(Int(orchestrator.overallProgress * 100))%")
+                        .font(.system(size: 12, design: .monospaced))
+                        .foregroundColor(.secondary)
+                }
+
+                ProgressView(value: orchestrator.overallProgress)
+                    .tint(.accentEon)
+
+                if !orchestrator.waveDescription.isEmpty {
+                    Text(orchestrator.waveDescription)
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Worker status list
+
+struct WorkerStatusListView: View {
+    let statuses: [UUID: OrchestratorAgent.WorkerStatus]
+
+    var sorted: [OrchestratorAgent.WorkerStatus] {
+        statuses.values.sorted { $0.taskDescription < $1.taskDescription }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Label("Workers (\(statuses.count))", systemImage: "square.grid.2x2")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(.secondary)
+
+            ForEach(sorted) { ws in
+                WorkerStatusRow(status: ws)
+            }
+        }
+    }
+}
+
+struct WorkerStatusRow: View {
+    let status: OrchestratorAgent.WorkerStatus
+
+    var body: some View {
+        HStack(spacing: 10) {
+            // Platform + state badge
+            Text(platformEmoji)
+                .font(.system(size: 14))
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(status.taskDescription.prefix(60))
+                    .font(.system(size: 12, weight: .medium))
+                    .lineLimit(1)
+                Text(statusLabel)
+                    .font(.system(size: 11))
+                    .foregroundColor(statusColor)
+            }
+
+            Spacer()
+
+            // Status dot
+            Circle()
+                .fill(statusColor)
+                .frame(width: 7, height: 7)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color.white.opacity(0.04))
+        )
+    }
+
+    private var platformEmoji: String {
+        if status.isQueued { return "🟡" }
+        if status.ranLocally { return "🟢" }
+        return "🔵"
+    }
+
+    private var statusLabel: String {
+        if status.isQueued { return "Köad till Mac" }
+        switch status.status {
+        case .pending:  return "Väntar…"
+        case .running:  return status.ranLocally ? "Körs lokalt" : "Väntar på Mac…"
+        case .done:     return "Klar ✓"
+        case .failed:   return "Misslyckades ✗"
+        }
+    }
+
+    private var statusColor: Color {
+        if status.isQueued { return .yellow }
+        switch status.status {
+        case .pending:  return .secondary
+        case .running:  return status.ranLocally ? .green : .blue
+        case .done:     return .green
+        case .failed:   return .red
+        }
     }
 }
 

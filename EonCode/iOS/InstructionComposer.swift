@@ -61,6 +61,40 @@ final class InstructionComposer: ObservableObject {
         pendingInstructions = await InstructionQueue.shared.pendingInstructions()
     }
 
+    // MARK: - Selective queueing (only terminal-requiring actions)
+
+    /// Queues only the actions that require Mac (terminal/build). Returns true if anything was queued.
+    @discardableResult
+    func queueMacActions(
+        from steps: [(description: String, action: AgentAction)],
+        projectID: UUID? = nil
+    ) async -> Int {
+        let macSteps = steps.filter { !$0.action.canRunOnIOS }
+        for step in macSteps {
+            let label = step.action.queueLabel
+            await queue(
+                instruction: "[\(step.description)] \(label)",
+                projectID: projectID
+            )
+        }
+        return macSteps.count
+    }
+
+    /// Queue a single AgentAction if it requires Mac; skip if it can run locally.
+    @discardableResult
+    func queueIfNeeded(
+        _ action: AgentAction,
+        description: String,
+        projectID: UUID? = nil
+    ) async -> Bool {
+        guard action.requiresMac else { return false }
+        await queue(
+            instruction: "[\(description)] \(action.queueLabel)",
+            projectID: projectID
+        )
+        return true
+    }
+
     // MARK: - Quick actions
 
     func buildProject(_ path: String, projectID: UUID? = nil) async {

@@ -133,3 +133,8 @@ extension Task where Success == Never, Failure == Never {
         try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
     }
 }
+
+// MARK: - Int
+extension Int {
+    var nonZero: Int? { self == 0 ? nil : self }
+}

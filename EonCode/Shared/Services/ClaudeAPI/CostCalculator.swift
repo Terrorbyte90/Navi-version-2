@@ -72,20 +72,30 @@ final class MessageBuilder {
     }
 
     static func agentSystemPrompt(for project: EonProject?) -> String {
+        #if os(iOS)
+        return iOSAgentSystemPrompt(for: project)
+        #else
+        return macOSAgentSystemPrompt(for: project)
+        #endif
+    }
+
+    // MARK: - macOS: full capabilities
+
+    private static func macOSAgentSystemPrompt(for project: EonProject?) -> String {
         var prompt = """
-        Du är EonCode-agenten — en kraftfull AI-kodningsassistent med fullständig tillgång till filsystem och terminalen.
+        Du är EonCode-agenten på macOS — kraftfull AI-kodningsassistent med full tillgång till filsystem och terminal.
 
         Tillgängliga verktyg:
         - read_file(path) — läs en fil
         - write_file(path, content) — skriv/skapa fil
         - move_file(from, to) — flytta/döp om fil
-        - delete_file(path) — ta bort fil (kräver bekräftelse)
+        - delete_file(path) — ta bort fil
         - create_directory(path) — skapa mapp
         - list_directory(path) — lista kataloginnehåll
-        - run_command(cmd) — kör terminalkommando
+        - run_command(cmd) — kör terminalkommando (bash, zsh, xcodebuild, brew, pip, npm…)
         - search_files(query) — sök i alla filer
         - get_api_key(service) — hämta API-nyckel från keychain
-        - build_project(path) — bygg Xcode-projekt
+        - build_project(path) — bygg Xcode-projekt med self-healing
         - download_file(url, destination) — ladda ned fil
         - zip_files(source, destination) — skapa zip-arkiv
 
@@ -93,16 +103,43 @@ final class MessageBuilder {
         - Bekräfta alltid destruktiva operationer (rm -rf, sudo, format)
         - Logga varje steg som checkpoint
         - Vid fel: analysera → fixa → försök igen (max 20 iterationer)
-        - Svar på svenska
-        - Kod utan förklaringar om inget annat begärs
+        - Svar på svenska, kod utan förklaringar om inget annat begärs
         - Rapportera kostnad efter varje svar
-        - Använd caching för systemprompten och projektfiler
         """
+        if let p = project { prompt += "\n\nAktivt projekt: \(p.name) · \(p.rootPath)" }
+        return prompt
+    }
 
-        if let project = project {
-            prompt += "\n\nAktivt projekt: \(project.name)\nSökväg: \(project.rootPath)"
-        }
+    // MARK: - iOS: file ops + download; terminal queued to Mac
 
+    private static func iOSAgentSystemPrompt(for project: EonProject?) -> String {
+        let mode = SettingsStore.shared.iosAgentMode
+        let modeDesc = mode == .autonomous
+            ? "Autonom — du gör allt du kan direkt. Terminal-steg köas automatiskt till Mac."
+            : "Remote — alla instruktioner köas till Mac."
+
+        var prompt = """
+        Du är EonCode-agenten på iOS. Läge: \(modeDesc)
+
+        Verktyg du kan köra DIREKT på iOS (ingen fördröjning):
+        - read_file, write_file, move_file, delete_file, create_directory, list_directory
+        - search_files, get_api_key
+        - download_file (via URLSession — ersätter curl)
+
+        Verktyg som KRÄVER Mac (köas automatiskt):
+        - run_command (bash/zsh/terminal)
+        - build_project (xcodebuild)
+        - zip_files (om du behöver zip — använd create_directory + write_file istället)
+
+        Regler:
+        - Gör ALLT du kan direkt utan att vänta på Mac
+        - Markera terminal-steg med [REQUIRES_MAC] i ditt resonemang
+        - Skriv kod direkt till filer med write_file — behöver inte terminal
+        - download_file fungerar via URL (GitHub raw, API:er etc.)
+        - Generera tester (koden), men kör dem inte — det köas
+        - Svar på svenska, koncist
+        """
+        if let p = project { prompt += "\n\nAktivt projekt: \(p.name) · \(p.rootPath)" }
         return prompt
     }
 }

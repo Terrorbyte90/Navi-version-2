@@ -83,8 +83,30 @@ final class AgentEngine: ObservableObject {
         var task = task
         task.status = .running
         task.startedAt = Date()
+        statusMessage = "Planerar uppgift…"
 
-        statusMessage = "Planerar uppgift..."
+        // MARK: Route complex tasks to Orchestrator
+        let shouldParallelize = SettingsStore.shared.parallelAgentsEnabled
+            && TaskDecomposer.shouldParallelize(instruction: task.instruction)
+
+        if shouldParallelize, let project = currentProject {
+            onUpdate("🌊 Komplex uppgift — startar parallella workers…")
+            let result = await OrchestratorAgent.shared.execute(
+                instruction: task.instruction,
+                project: project,
+                model: project.activeModel,
+                onProgress: onUpdate
+            )
+            task.status = result.succeeded ? .completed : .failed
+            task.completedAt = Date()
+            task.result = result.summary
+            streamingText = ""
+            statusMessage = result.succeeded ? "Klar ✓" : "Misslyckad"
+            onUpdate(result.summary)
+            return
+        }
+
+        // MARK: Sequential execution (simple tasks)
 
         // Build initial messages
         var messages = conversation.messages
@@ -174,17 +196,33 @@ final class AgentEngine: ObservableObject {
             }
 
             // Execute tool calls
-            statusMessage = "Exekverar verktyg..."
+            statusMessage = "Exekverar verktyg…"
             var toolResults: [MessageContent] = []
 
             for toolCall in toolCalls {
-                let params = toolCall.input.mapValues { $0.value }
-                let result = await toolExecutor.execute(
+                let params = toolCall.input.compactMapValues { $0.value as? String }
+                let result: String
+
+                #if os(iOS)
+                // On iOS: route through LocalAgentEngine (respects autonomous/remote mode)
+                let action = agentActionFromTool(name: toolCall.name, params: params)
+                let actionResult = await LocalAgentEngine.shared.execute(
+                    action: action,
+                    projectRoot: currentProject?.resolvedURL
+                )
+                result = actionResult.output
+                let badge = actionResult.isQueued ? "🟡" : "🟢"
+                onUpdate("\(badge) \(toolCall.name): \(result.prefix(200))")
+                #else
+                // On macOS: full execution
+                result = await toolExecutor.execute(
                     name: toolCall.name,
-                    params: params as? [String: String] ?? [:],
+                    params: params,
                     projectRoot: currentProject?.resolvedURL
                 )
                 onUpdate("🔧 \(toolCall.name): \(result.prefix(200))")
+                #endif
+
                 toolResults.append(.toolResult(id: toolCall.id, content: result, isError: false))
             }
 
@@ -322,6 +360,26 @@ final class AgentEngine: ObservableObject {
         conversation.updateCost(inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, costSEK: costSEK)
 
         onComplete(usage)
+    }
+}
+
+// MARK: - Tool name → AgentAction helper (used on iOS)
+
+func agentActionFromTool(name: String, params: [String: String]) -> AgentAction {
+    switch name {
+    case "read_file":       return .readFile(path: params["path"] ?? "")
+    case "write_file":      return .writeFile(path: params["path"] ?? "", content: params["content"] ?? "")
+    case "move_file":       return .moveFile(from: params["from"] ?? "", to: params["to"] ?? "")
+    case "delete_file":     return .deleteFile(path: params["path"] ?? "")
+    case "create_directory":return .createDirectory(path: params["path"] ?? "")
+    case "list_directory":  return .listDirectory(path: params["path"] ?? "")
+    case "run_command":     return .runCommand(cmd: params["cmd"] ?? "")
+    case "search_files":    return .searchFiles(query: params["query"] ?? "")
+    case "get_api_key":     return .getAPIKey(service: params["service"] ?? "")
+    case "build_project":   return .buildProject(path: params["path"] ?? "")
+    case "download_file":   return .downloadFile(url: params["url"] ?? "", destination: params["destination"] ?? "")
+    case "zip_files":       return .createArchive(source: params["source"] ?? "", destination: params["destination"] ?? "")
+    default:                return .custom(name: name, params: params)
     }
 }
 
