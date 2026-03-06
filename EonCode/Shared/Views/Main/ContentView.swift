@@ -79,138 +79,111 @@ struct ContentView: View {
 
     #if os(iOS)
     @State private var showSidebar = false
-    @State private var sidebarOffset: CGFloat = -320
+    // Reactive chat manager so model name updates live
+    @StateObject private var chatMgr = ChatManager.shared
+    @StateObject private var planMgr = PlanManager.shared
+    @StateObject private var browserAgent = BrowserAgent.shared
 
     var iOSLayout: some View {
-        ZStack(alignment: .topLeading) {
-            // MARK: Main content (full screen, no nav bar, no tab bar)
-            iOSMainContent
-                .ignoresSafeArea(edges: .top)
+        ZStack(alignment: .leading) {
+            // ── Main content ────────────────────────────────────────────────
+            VStack(spacing: 0) {
+                iOSTopBar
+                Divider().opacity(0.12)
+                iOSMainContent
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color.chatBackground)
 
-            // MARK: Sidebar overlay
+            // ── Dim overlay ─────────────────────────────────────────────────
             if showSidebar {
                 Color.black.opacity(0.45)
                     .ignoresSafeArea()
                     .onTapGesture { closeSidebar() }
                     .transition(.opacity)
                     .zIndex(10)
-
-                ChatHistorySidebar(
-                    showSidebar: $showSidebar,
-                    showNewProject: $showNewProject,
-                    selectedTab: $selectedTab
-                )
-                .frame(width: 300)
-                .transition(.move(edge: .leading))
-                .zIndex(11)
             }
+
+            // ── Sidebar panel ───────────────────────────────────────────────
+            ChatHistorySidebar(
+                showSidebar: $showSidebar,
+                showNewProject: $showNewProject,
+                selectedTab: $selectedTab
+            )
+            .frame(width: 300)
+            .offset(x: showSidebar ? 0 : -300)
+            .zIndex(11)
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.85), value: showSidebar)
-        .sheet(isPresented: $showNewProject) {
-            NewProjectView()
-        }
-        .preferredColorScheme(.dark)
-        .onAppear {
-            PeerSyncEngine.shared.startBrowsing()
-        }
+        .sheet(isPresented: $showNewProject) { NewProjectView() }
+        .onAppear { PeerSyncEngine.shared.startBrowsing() }
     }
 
-    // MARK: - Main content switcher (no NavigationView, no TabView)
-
-    @ViewBuilder
-    var iOSMainContent: some View {
-        VStack(spacing: 0) {
-            // Custom top bar
-            iOSTopBar
-            Divider().opacity(0.12)
-
-            // Content
-            switch selectedTab {
-            case .chat:
-                PureChatView()
-            case .project:
-                if let project = activeProject, let agent = activeAgent {
-                    ChatView(agent: agent)
-                } else {
-                    iOSWelcome
-                }
-            case .browser:
-                BrowserView()
-            case .artifacts:
-                ArtifactView()
-            case .plan:
-                PlanView()
-            case .github:
-                GitHubView()
-            }
-        }
-        .background(Color.chatBackground)
-    }
-
-    // MARK: - Top bar (ChatGPT-style)
+    // MARK: - Top bar
 
     var iOSTopBar: some View {
         HStack(spacing: 0) {
-            // Hamburger / sidebar toggle
-            Button {
-                openSidebar()
-            } label: {
+            // Hamburger
+            Button { openSidebar() } label: {
                 Image(systemName: "line.3.horizontal")
-                    .font(.system(size: 18, weight: .medium))
+                    .font(.system(size: 20, weight: .medium))
                     .foregroundColor(.primary)
                     .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
 
             Spacer()
 
-            // Center: model/tab picker
+            // Center title / model picker
             iOSCenterTitle
 
             Spacer()
 
-            // Right: contextual action
+            // Trailing action
             iOSTrailingButton
                 .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
         }
         .padding(.horizontal, 4)
-        .padding(.top, topSafeArea)
-        .frame(height: 44 + topSafeArea)
+        .frame(height: 52)
         .background(Color.chatBackground)
     }
+
+    // MARK: - Center title (reactive)
 
     @ViewBuilder
     var iOSCenterTitle: some View {
         switch selectedTab {
         case .chat:
+            // Model picker — reads from @StateObject so it updates reactively
             Menu {
                 ForEach(ClaudeModel.allCases) { model in
                     Button {
-                        if let conv = ChatManager.shared.activeConversation,
-                           let idx = ChatManager.shared.conversations.firstIndex(where: { $0.id == conv.id }) {
-                            ChatManager.shared.conversations[idx].model = model
-                            ChatManager.shared.activeConversation?.model = model
+                        if let conv = chatMgr.activeConversation,
+                           let idx = chatMgr.conversations.firstIndex(where: { $0.id == conv.id }) {
+                            chatMgr.conversations[idx].model = model
+                            chatMgr.activeConversation?.model = model
                         }
                     } label: {
                         HStack {
                             Text(model.displayName)
-                            Text(model.description)
-                                .font(.caption)
-                                .foregroundColor(.secondary)
+                            if model == chatMgr.activeConversation?.model {
+                                Image(systemName: "checkmark")
+                            }
                         }
                     }
                 }
             } label: {
-                HStack(spacing: 4) {
-                    Text(ChatManager.shared.activeConversation?.model.displayName ?? "Claude")
+                HStack(spacing: 5) {
+                    Text(chatMgr.activeConversation?.model.displayName ?? "Claude")
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(.primary)
                     Image(systemName: "chevron.down")
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundColor(.secondary)
                 }
+                .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
 
         case .project:
             Text(activeProject?.name ?? "Projekt")
@@ -229,7 +202,7 @@ struct ContentView: View {
                 .foregroundColor(.primary)
 
         case .plan:
-            Text(PlanManager.shared.activePlan?.title ?? "Planera")
+            Text(planMgr.activePlan?.title ?? "Planera")
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundColor(.primary)
                 .lineLimit(1)
@@ -241,46 +214,70 @@ struct ContentView: View {
         }
     }
 
+    // MARK: - Trailing button
+
     @ViewBuilder
     var iOSTrailingButton: some View {
         switch selectedTab {
         case .chat:
-            Button {
-                _ = ChatManager.shared.newConversation()
-            } label: {
+            Button { _ = chatMgr.newConversation() } label: {
                 Image(systemName: "square.and.pencil")
-                    .font(.system(size: 17))
+                    .font(.system(size: 18))
                     .foregroundColor(.primary)
             }
-            .buttonStyle(.plain)
 
         case .project:
-            macConnectionBadge
+            HStack(spacing: 4) {
+                Circle()
+                    .fill(statusBroadcaster.remoteMacIsOnline ? Color.green : Color.red.opacity(0.6))
+                    .frame(width: 7, height: 7)
+                Text(statusBroadcaster.remoteMacIsOnline ? "Mac" : "Offline")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(statusBroadcaster.remoteMacIsOnline ? .green : .secondary)
+            }
 
         case .browser:
             Circle()
-                .fill(BrowserAgent.shared.status == .working ? Color.green : Color.secondary.opacity(0.3))
+                .fill(browserAgent.status == .working ? Color.green : Color.secondary.opacity(0.3))
                 .frame(width: 8, height: 8)
 
-        case .artifacts:
-            EmptyView()
-
         case .plan:
-            Button {
-                _ = PlanManager.shared.newPlan()
-            } label: {
+            Button { _ = planMgr.newPlan() } label: {
                 Image(systemName: "square.and.pencil")
-                    .font(.system(size: 17))
+                    .font(.system(size: 18))
                     .foregroundColor(.primary)
             }
-            .buttonStyle(.plain)
 
-        case .github:
-            EmptyView()
+        default:
+            Color.clear.frame(width: 1, height: 1)
         }
     }
 
-    // MARK: - Welcome (no project selected)
+    // MARK: - Main content
+
+    @ViewBuilder
+    var iOSMainContent: some View {
+        switch selectedTab {
+        case .chat:
+            PureChatView()
+        case .project:
+            if let project = activeProject, let agent = activeAgent {
+                ChatView(agent: agent)
+            } else {
+                iOSWelcome
+            }
+        case .browser:
+            BrowserView()
+        case .artifacts:
+            ArtifactView()
+        case .plan:
+            PlanView()
+        case .github:
+            GitHubView()
+        }
+    }
+
+    // MARK: - Welcome
 
     var iOSWelcome: some View {
         VStack(spacing: 32) {
@@ -295,9 +292,7 @@ struct ContentView: View {
                     .font(.system(size: 15))
                     .foregroundColor(.secondary)
             }
-            Button {
-                openSidebar()
-            } label: {
+            Button { openSidebar() } label: {
                 Label("Öppna sidomenyn", systemImage: "sidebar.left")
                     .font(.system(size: 15, weight: .medium))
                     .foregroundColor(.accentEon)
@@ -306,24 +301,10 @@ struct ContentView: View {
                     .background(Color.accentEon.opacity(0.12))
                     .cornerRadius(12)
             }
-            .buttonStyle(.plain)
             Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.chatBackground)
-    }
-
-    // MARK: - Mac connection badge
-
-    var macConnectionBadge: some View {
-        HStack(spacing: 4) {
-            Circle()
-                .fill(statusBroadcaster.remoteMacIsOnline ? Color.green : Color.red.opacity(0.6))
-                .frame(width: 7, height: 7)
-            Text(statusBroadcaster.remoteMacIsOnline ? "Mac" : "Offline")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundColor(statusBroadcaster.remoteMacIsOnline ? .green : .secondary)
-        }
     }
 
     // MARK: - Sidebar helpers
@@ -338,12 +319,6 @@ struct ContentView: View {
         withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
             showSidebar = false
         }
-    }
-
-    private var topSafeArea: CGFloat {
-        (UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .first?.windows.first?.safeAreaInsets.top) ?? 44
     }
     #endif
 }

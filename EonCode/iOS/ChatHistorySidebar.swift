@@ -29,12 +29,8 @@ struct ChatHistorySidebar: View {
 
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 0) {
-                    // Navigation shortcuts
                     navShortcuts
-
                     Divider().opacity(0.08).padding(.vertical, 8)
-
-                    // Context-aware history section
                     contextualHistory
                 }
                 .padding(.bottom, 16)
@@ -46,6 +42,7 @@ struct ChatHistorySidebar: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(UIColor.systemBackground))
+        .ignoresSafeArea(edges: .vertical)   // let topBar/bottomBar handle safe area manually
         .sheet(isPresented: $showSettings) { SettingsView() }
         .sheet(isPresented: $showOpenProject) {
             iCloudProjectPicker { url in openProjectFromURL(url) }

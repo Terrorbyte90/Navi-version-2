@@ -156,13 +156,13 @@ struct PureChatView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Model picker bar (compact, no duplicate new-chat button)
+            // Model picker bar — only shown on macOS (on iOS it's in the top nav bar)
+            #if os(macOS)
             modelPickerBar
-
             Divider().opacity(0.15)
+            #endif
 
             if let conv = conversation {
-                // Messages scroll — input bar pinned via safeAreaInset
                 ScrollViewReader { proxy in
                     ScrollView {
                         LazyVStack(spacing: 12) {
@@ -189,7 +189,6 @@ struct PureChatView: View {
                     .onChange(of: manager.streamingText) { _ in scrollToBottom(proxy) }
                 }
             } else {
-                // Empty state with input at bottom
                 ZStack(alignment: .bottom) {
                     chatEmptyState
                     VStack(spacing: 0) {
@@ -313,78 +312,123 @@ struct PureChatView: View {
     // MARK: - Input bar
 
     var chatInputBar: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 0) {
             // Image previews
             if !selectedImages.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
                         ForEach(Array(selectedImages.enumerated()), id: \.offset) { idx, data in
-                            #if os(iOS)
-                            if let ui = UIImage(data: data) {
-                                Image(uiImage: ui)
-                                    .resizable().scaledToFill()
-                                    .frame(width: 60, height: 60)
-                                    .cornerRadius(8)
-                                    .overlay(
-                                        Button { selectedImages.remove(at: idx) } label: {
-                                            Image(systemName: "xmark.circle.fill")
-                                                .foregroundColor(.white)
-                                        }
-                                        .padding(4),
-                                        alignment: .topTrailing
-                                    )
+                            ZStack(alignment: .topTrailing) {
+                                #if os(iOS)
+                                if let ui = UIImage(data: data) {
+                                    Image(uiImage: ui)
+                                        .resizable().scaledToFill()
+                                        .frame(width: 60, height: 60)
+                                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                                }
+                                #else
+                                if let ns = NSImage(data: data) {
+                                    Image(nsImage: ns)
+                                        .resizable().scaledToFill()
+                                        .frame(width: 60, height: 60)
+                                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                                }
+                                #endif
+                                Button { selectedImages.remove(at: idx) } label: {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .foregroundColor(.white)
+                                        .background(Circle().fill(Color.black.opacity(0.4)))
+                                }
+                                .buttonStyle(.plain)
+                                .offset(x: 4, y: -4)
                             }
-                            #else
-                            if let ns = NSImage(data: data) {
-                                Image(nsImage: ns)
-                                    .resizable().scaledToFill()
-                                    .frame(width: 60, height: 60)
-                                    .cornerRadius(8)
-                                    .overlay(
-                                        Button { selectedImages.remove(at: idx) } label: {
-                                            Image(systemName: "xmark.circle.fill")
-                                                .foregroundColor(.white)
-                                        }
-                                        .padding(4),
-                                        alignment: .topTrailing
-                                    )
-                            }
-                            #endif
                         }
                     }
                     .padding(.horizontal, 16)
+                    .padding(.top, 8)
                 }
             }
 
-            HStack(spacing: 10) {
+            HStack(alignment: .bottom, spacing: 10) {
                 // Image attach
-                Button {
-                    isShowingImagePicker = true
-                } label: {
-                    Image(systemName: "photo")
-                        .font(.system(size: 16))
+                Button { isShowingImagePicker = true } label: {
+                    Image(systemName: "paperclip")
+                        .font(.system(size: 17))
                         .foregroundColor(.secondary)
+                        .frame(width: 36, height: 36)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
 
-                // Text input
-                TextField("Skriv ett meddelande…", text: $inputText, axis: .vertical)
-                    .lineLimit(1...6)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 14))
-                    .onSubmit { sendMessage() }
+                // Text input — uses ZStack for placeholder (more reliable than TextField on iOS)
+                ZStack(alignment: .leading) {
+                    if inputText.isEmpty {
+                        Text("Skriv ett meddelande…")
+                            .font(.system(size: 15))
+                            .foregroundColor(.secondary.opacity(0.5))
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 8)
+                            .allowsHitTesting(false)
+                    }
+                    TextEditor(text: $inputText)
+                        .font(.system(size: 15))
+                        .frame(minHeight: 36, maxHeight: 120)
+                        .scrollContentBackground(.hidden)
+                        .background(Color.clear)
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(
+                    RoundedRectangle(cornerRadius: 18)
+                        .fill(Color.white.opacity(0.07))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 18)
+                                .strokeBorder(Color.white.opacity(0.12), lineWidth: 0.5)
+                        )
+                )
 
-                // Send
+                // Send / stop
                 Button(action: sendMessage) {
-                    Image(systemName: manager.isStreaming ? "stop.fill" : "arrow.up.circle.fill")
-                        .font(.system(size: 22))
-                        .foregroundColor(inputText.isBlank && !manager.isStreaming ? .secondary : .accentEon)
+                    if manager.isStreaming {
+                        Image(systemName: "stop.fill")
+                            .font(.system(size: 20))
+                            .foregroundColor(.accentEon)
+                    } else {
+                        Image(systemName: "arrow.up.circle.fill")
+                            .font(.system(size: 28))
+                            .foregroundColor(inputText.isBlank && selectedImages.isEmpty ? .secondary.opacity(0.3) : .accentEon)
+                    }
                 }
                 .buttonStyle(.plain)
-                .disabled(inputText.isBlank && !manager.isStreaming)
+                .disabled(inputText.isBlank && selectedImages.isEmpty && !manager.isStreaming)
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+
+            // Cost row
+            if costTracker.lastRequestSEK > 0 || costTracker.sessionSEK > 0 {
+                HStack(spacing: 10) {
+                    if costTracker.lastRequestSEK > 0 {
+                        HStack(spacing: 3) {
+                            Image(systemName: "arrow.up.circle").font(.system(size: 9))
+                            Text(costTracker.formattedLast().components(separatedBy: " (").first ?? "")
+                                .font(.system(size: 11, design: .monospaced))
+                        }
+                        .foregroundColor(.secondary.opacity(0.5))
+                    }
+                    if costTracker.sessionSEK > 0 {
+                        HStack(spacing: 3) {
+                            Image(systemName: "clock").font(.system(size: 9))
+                            Text(costTracker.formattedSession().components(separatedBy: " (").first ?? "")
+                                .font(.system(size: 11, design: .monospaced))
+                        }
+                        .foregroundColor(.secondary.opacity(0.35))
+                    }
+                    Spacer()
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 6)
+            }
         }
     }
 
