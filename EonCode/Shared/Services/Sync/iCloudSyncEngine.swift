@@ -96,9 +96,9 @@ final class iCloudSyncEngine: ObservableObject {
         if let err = coordError ?? writeError {
             throw err
         }
-
-        // Trigger iCloud upload
-        try? fm.setUbiquitous(true, itemAt: url, destinationURL: url)
+        // File is already in the iCloud container — NSFileCoordinator write
+        // with .forReplacing triggers iCloud upload automatically.
+        // No need to call setUbiquitous (which is only for moving local files TO iCloud).
     }
 
     // MARK: - Read with coordinator

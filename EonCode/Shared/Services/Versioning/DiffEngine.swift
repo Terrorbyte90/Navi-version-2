@@ -54,12 +54,33 @@ struct DiffEngine {
     }
 
     private static func longestCommonSubsequence(_ a: [String], _ b: [String]) -> [String] {
-        // Simplified — for large files use patience algorithm
-        guard a.count < 500 && b.count < 500 else { return [] }
-
         let m = a.count, n = b.count
-        var dp = Array(repeating: Array(repeating: 0, count: n + 1), count: m + 1)
 
+        // For very large files, use a simpler line-matching approach
+        // to avoid O(m*n) memory/time explosion
+        if m > 2000 || n > 2000 {
+            return hashBasedLCS(a, b)
+        }
+
+        // Standard DP approach with space optimization for medium files
+        // Use rolling two rows instead of full m x n matrix
+        var prev = Array(repeating: 0, count: n + 1)
+        var curr = Array(repeating: 0, count: n + 1)
+
+        for i in 1...m {
+            for j in 1...n {
+                if a[i-1] == b[j-1] {
+                    curr[j] = prev[j-1] + 1
+                } else {
+                    curr[j] = max(prev[j], curr[j-1])
+                }
+            }
+            prev = curr
+            curr = Array(repeating: 0, count: n + 1)
+        }
+
+        // Backtrack to find the LCS (need full DP for this)
+        var dp = Array(repeating: Array(repeating: 0, count: n + 1), count: m + 1)
         for i in 1...m {
             for j in 1...n {
                 if a[i-1] == b[j-1] {
@@ -83,5 +104,27 @@ struct DiffEngine {
             }
         }
         return result.reversed()
+    }
+
+    /// Hash-based LCS for very large files — finds common lines by hash matching
+    private static func hashBasedLCS(_ a: [String], _ b: [String]) -> [String] {
+        // Build a map of line -> positions in b
+        var bPositions: [String: [Int]] = [:]
+        for (j, line) in b.enumerated() {
+            bPositions[line, default: []].append(j)
+        }
+
+        // Find matching lines preserving order (patience-like)
+        var result: [String] = []
+        var lastJ = -1
+        for line in a {
+            guard let positions = bPositions[line] else { continue }
+            // Find the first position in b after lastJ
+            if let nextJ = positions.first(where: { $0 > lastJ }) {
+                result.append(line)
+                lastJ = nextJ
+            }
+        }
+        return result
     }
 }

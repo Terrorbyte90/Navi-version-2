@@ -26,7 +26,7 @@ struct ConflictResolver {
         }
 
         // iOS changes are never destructive — create branch
-        let isIOSChange = UIDevice.deviceID != UIDevice.deviceName // simple heuristic
+        let isIOSChange = !UIDevice.isMac
         if isIOSChange || remoteDate > localDate {
             let branchName = "ios-changes-\(Date().iso8601.prefix(10))"
             return .createBranch(branchName: String(branchName))

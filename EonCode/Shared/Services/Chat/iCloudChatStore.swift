@@ -25,7 +25,9 @@ final class iCloudChatStore: ObservableObject {
             DispatchQueue.global(qos: .utility).async {
                 let coordinator = NSFileCoordinator()
                 var coordError: NSError?
+                var blockRan = false
                 coordinator.coordinate(writingItemAt: fileURL, options: .forReplacing, error: &coordError) { url in
+                    blockRan = true
                     do {
                         try data.write(to: url, options: .atomic)
                         cont.resume()
@@ -33,7 +35,7 @@ final class iCloudChatStore: ObservableObject {
                         cont.resume(throwing: error)
                     }
                 }
-                if let err = coordError { cont.resume(throwing: err) }
+                if !blockRan, let err = coordError { cont.resume(throwing: err) }
             }
         }
     }
@@ -48,7 +50,9 @@ final class iCloudChatStore: ObservableObject {
             DispatchQueue.global(qos: .userInitiated).async {
                 let coordinator = NSFileCoordinator()
                 var coordError: NSError?
+                var blockRan = false
                 coordinator.coordinate(readingItemAt: fileURL, options: [], error: &coordError) { url in
+                    blockRan = true
                     do {
                         let data = try Data(contentsOf: url)
                         let conv = try JSONDecoder().decode(ChatConversation.self, from: data)
@@ -57,7 +61,7 @@ final class iCloudChatStore: ObservableObject {
                         cont.resume(throwing: error)
                     }
                 }
-                if let err = coordError { cont.resume(throwing: err) }
+                if !blockRan, let err = coordError { cont.resume(throwing: err) }
             }
         }
     }

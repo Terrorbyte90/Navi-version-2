@@ -25,7 +25,9 @@ final class iCloudMemoryStore {
             DispatchQueue.global(qos: .userInitiated).async {
                 let coordinator = NSFileCoordinator()
                 var coordError: NSError?
+                var blockRan = false
                 coordinator.coordinate(readingItemAt: url, options: [], error: &coordError) { u in
+                    blockRan = true
                     do {
                         let data = try Data(contentsOf: u)
                         let memories = try JSONDecoder().decode([Memory].self, from: data)
@@ -34,7 +36,7 @@ final class iCloudMemoryStore {
                         cont.resume(throwing: error)
                     }
                 }
-                if let err = coordError { cont.resume(throwing: err) }
+                if !blockRan, let err = coordError { cont.resume(throwing: err) }
             }
         }
     }
@@ -49,7 +51,9 @@ final class iCloudMemoryStore {
             DispatchQueue.global(qos: .utility).async {
                 let coordinator = NSFileCoordinator()
                 var coordError: NSError?
+                var blockRan = false
                 coordinator.coordinate(writingItemAt: url, options: .forReplacing, error: &coordError) { u in
+                    blockRan = true
                     do {
                         try data.write(to: u, options: .atomic)
                         cont.resume()
@@ -57,7 +61,7 @@ final class iCloudMemoryStore {
                         cont.resume(throwing: error)
                     }
                 }
-                if let err = coordError { cont.resume(throwing: err) }
+                if !blockRan, let err = coordError { cont.resume(throwing: err) }
             }
         }
     }
