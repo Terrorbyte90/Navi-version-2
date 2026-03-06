@@ -235,6 +235,17 @@ final class AgentEngine: ObservableObject {
         if task.status == .completed {
             statusMessage = "Uppgift klar ✓"
         }
+
+        // Extract memories from agent conversation (best-effort, background)
+        if messages.count >= 6 {
+            let convId = conversation.id
+            Task {
+                await MemoryManager.shared.extractMemoriesFromAgent(
+                    messages: messages,
+                    conversationId: convId
+                )
+            }
+        }
     }
 
     // MARK: - Stream event handler

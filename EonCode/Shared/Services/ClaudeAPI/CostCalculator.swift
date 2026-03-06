@@ -73,10 +73,13 @@ final class MessageBuilder {
 
     static func agentSystemPrompt(for project: EonProject?) -> String {
         #if os(iOS)
-        return iOSAgentSystemPrompt(for: project)
+        var prompt = iOSAgentSystemPrompt(for: project)
         #else
-        return macOSAgentSystemPrompt(for: project)
+        var prompt = macOSAgentSystemPrompt(for: project)
         #endif
+        let memCtx = MemoryManager.shared.memoryContext()
+        if !memCtx.isEmpty { prompt += memCtx }
+        return prompt
     }
 
     // MARK: - macOS: full capabilities

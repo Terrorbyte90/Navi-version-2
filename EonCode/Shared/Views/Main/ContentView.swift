@@ -1,5 +1,7 @@
 import SwiftUI
 
+enum AppSection: String, Hashable { case project, pureChat, browser }
+
 struct ContentView: View {
     @StateObject private var projectStore = ProjectStore.shared
     @StateObject private var agentPool = AgentPool.shared
@@ -10,6 +12,7 @@ struct ContentView: View {
     @State private var showNewProject = false
     @State private var selectedTab: AppTab = .chat
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
+    @State private var macSection: AppSection = .project
 
     var activeProject: EonProject? { projectStore.activeProject }
     var activeAgent: ProjectAgent? {
@@ -32,14 +35,22 @@ struct ContentView: View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
             SidebarView(
                 selectedProject: $projectStore.activeProject,
-                showNewProject: $showNewProject
+                showNewProject: $showNewProject,
+                section: $macSection
             )
             .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 350)
         } detail: {
-            if let project = activeProject, let agent = activeAgent {
-                MacMainView(project: project, agent: agent, selectedTab: $selectedTab)
-            } else {
-                WelcomeView(showNewProject: $showNewProject)
+            switch macSection {
+            case .pureChat:
+                PureChatView()
+            case .browser:
+                BrowserView()
+            case .project:
+                if let project = activeProject, let agent = activeAgent {
+                    MacMainView(project: project, agent: agent, selectedTab: $selectedTab)
+                } else {
+                    WelcomeView(showNewProject: $showNewProject)
+                }
             }
         }
         .navigationTitle("")
@@ -127,6 +138,38 @@ struct ContentView: View {
             .tag(AppTab.agents)
             .badge(agentPool.activeCount > 0 ? "\(agentPool.activeCount)" : nil)
 
+            // Pure chat tab
+            NavigationView {
+                PureChatView()
+                    .navigationTitle("Chatt")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .navigationBarTrailing) {
+                            Button {
+                                _ = ChatManager.shared.newConversation()
+                            } label: {
+                                Image(systemName: "square.and.pencil")
+                                    .foregroundColor(.accentEon)
+                            }
+                        }
+                    }
+            }
+            .tabItem {
+                Label("Chatt", systemImage: "bubble.left.and.bubble.right.fill")
+            }
+            .tag(AppTab.pureChat)
+
+            // Browser tab
+            NavigationView {
+                BrowserView()
+                    .navigationTitle("Webb")
+                    .navigationBarTitleDisplayMode(.inline)
+            }
+            .tabItem {
+                Label("Webb", systemImage: "globe")
+            }
+            .tag(AppTab.browser)
+
             NavigationView {
                 SettingsView()
                     .navigationTitle("Inställningar")
@@ -161,7 +204,7 @@ struct ContentView: View {
 // MARK: - Tabs
 
 enum AppTab: Int, Hashable {
-    case chat, editor, agents, settings
+    case chat, editor, agents, pureChat, browser, settings
 }
 
 // MARK: - macOS Main View

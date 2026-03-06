@@ -40,6 +40,20 @@ struct SettingsView: View {
             costSection
                 .tabItem { Label("Kostnad", systemImage: "chart.bar") }
                 .padding()
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    memoriesSection
+                    Divider().opacity(0.2)
+                    NavigationLink("Visa och redigera alla minnen →") {
+                        MemoryView()
+                    }
+                    .font(.system(size: 13))
+                    .foregroundColor(.accentEon)
+                }
+                .padding()
+            }
+            .tabItem { Label("Minnen", systemImage: "brain") }
         }
         .frame(width: 560, height: 640)
         .background(Color.chatBackground)
@@ -56,6 +70,7 @@ struct SettingsView: View {
             Section("Röst (ElevenLabs)") {
                 Toggle("Aktivera text-till-tal", isOn: $settings.ttsEnabled)
             }
+            Section("Minnen") { memoriesSection }
         }
         .navigationTitle("Inställningar")
         .navigationBarTitleDisplayMode(.inline)
@@ -118,6 +133,34 @@ struct SettingsView: View {
                 Text("Komplexa uppgifter delas upp i parallella deluppgifter. Fler workers = snabbare men fler API-anrop.")
                     .font(.system(size: 11))
                     .foregroundColor(.secondary.opacity(0.7))
+            }
+        }
+    }
+
+    var memoriesSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Toggle("Extrahera minnen automatiskt", isOn: Binding(
+                get: { settings.autoExtractMemories },
+                set: { settings.autoExtractMemories = $0 }
+            ))
+
+            Text("Claude lär sig om dig med varje konversation — namn, preferenser, projekt. Minnen injiceras i system-prompten.")
+                .font(.system(size: 11))
+                .foregroundColor(.secondary.opacity(0.7))
+
+            let count = MemoryManager.shared.memories.count
+            HStack {
+                Image(systemName: "brain")
+                    .foregroundColor(.accentEon)
+                    .font(.system(size: 13))
+                Text("\(count) minne\(count == 1 ? "" : "n") sparade")
+                    .font(.system(size: 13))
+                Spacer()
+                #if os(iOS)
+                NavigationLink("Hantera →") { MemoryView() }
+                    .font(.system(size: 13))
+                    .foregroundColor(.accentEon)
+                #endif
             }
         }
     }
