@@ -106,18 +106,66 @@ extension View {
     }
 }
 
-// MARK: - Color (ChatGPT-inspired dark theme)
+// MARK: - Color (system-adaptive, follows system light/dark mode)
 extension Color {
-    static var codeBackground: Color { Color(red: 0.10, green: 0.10, blue: 0.10) }       // #1a1a1a
-    static var chatBackground: Color { Color(red: 0.13, green: 0.13, blue: 0.13) }       // #212121
-    static var sidebarBackground: Color { Color(red: 0.09, green: 0.09, blue: 0.09) }    // #171717
-    static var accentEon: Color { Color(red: 0.3, green: 0.6, blue: 1.0) }               // Keep brand blue
-    static var assistantBubble: Color { Color.clear }                                      // No bubble bg
-    static var userBubble: Color { Color(red: 0.185, green: 0.185, blue: 0.185) }        // #2f2f2f subtle pill
-    static var inputBackground: Color { Color(red: 0.185, green: 0.185, blue: 0.185) }   // #2f2f2f
-    static var inputBorder: Color { Color(red: 0.25, green: 0.25, blue: 0.25) }          // #404040
-    static var surfaceHover: Color { Color(red: 0.16, green: 0.16, blue: 0.16) }         // #292929
-    static var dividerColor: Color { Color.white.opacity(0.08) }
+    static var codeBackground: Color {
+        #if os(macOS)
+        Color(NSColor.textBackgroundColor)
+        #else
+        Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor(white: 0.10, alpha: 1) : UIColor(white: 0.95, alpha: 1) })
+        #endif
+    }
+    static var chatBackground: Color {
+        #if os(macOS)
+        Color(NSColor.windowBackgroundColor)
+        #else
+        Color(UIColor.systemBackground)
+        #endif
+    }
+    static var sidebarBackground: Color {
+        #if os(macOS)
+        Color(NSColor.controlBackgroundColor)
+        #else
+        Color(UIColor.secondarySystemBackground)
+        #endif
+    }
+    static var accentEon: Color { Color(red: 0.3, green: 0.6, blue: 1.0) }
+    static var assistantBubble: Color { Color.clear }
+    static var userBubble: Color {
+        #if os(macOS)
+        Color(NSColor.controlColor)
+        #else
+        Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor(white: 0.185, alpha: 1) : UIColor(white: 0.92, alpha: 1) })
+        #endif
+    }
+    static var inputBackground: Color {
+        #if os(macOS)
+        Color(NSColor.controlBackgroundColor)
+        #else
+        Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor(white: 0.185, alpha: 1) : UIColor(white: 0.93, alpha: 1) })
+        #endif
+    }
+    static var inputBorder: Color {
+        #if os(macOS)
+        Color(NSColor.separatorColor)
+        #else
+        Color(UIColor.separator)
+        #endif
+    }
+    static var surfaceHover: Color {
+        #if os(macOS)
+        Color(NSColor.selectedContentBackgroundColor).opacity(0.08)
+        #else
+        Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor(white: 0.16, alpha: 1) : UIColor(white: 0.88, alpha: 1) })
+        #endif
+    }
+    static var dividerColor: Color {
+        #if os(macOS)
+        Color(NSColor.separatorColor)
+        #else
+        Color(UIColor.separator)
+        #endif
+    }
 }
 
 // MARK: - Int64

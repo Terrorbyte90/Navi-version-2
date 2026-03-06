@@ -158,7 +158,7 @@ struct ContentView: View {
             Button { openSidebar() } label: {
                 Image(systemName: "sidebar.left")
                     .font(.system(size: 18, weight: .regular))
-                    .foregroundColor(Color(red:0.68,green:0.68,blue:0.68))
+                    .foregroundColor(Color.secondary)
                     .frame(width: 44, height: 44)
                     .contentShape(Rectangle())
             }
@@ -208,13 +208,13 @@ struct ContentView: View {
                 HStack(spacing: 5) {
                     Text("EonCode")
                         .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(Color(red:0.925,green:0.925,blue:0.925))
+                        .foregroundColor(Color.primary)
                     Text(chatMgr.activeConversation?.model.displayName ?? "Claude")
                         .font(.system(size: 15))
-                        .foregroundColor(Color(red:0.68,green:0.68,blue:0.68))
+                        .foregroundColor(Color.secondary)
                     Image(systemName: "chevron.down")
                         .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(Color(red:0.5,green:0.5,blue:0.5))
+                        .foregroundColor(Color.secondary.opacity(0.6))
                 }
                 .contentShape(Rectangle())
             }
@@ -224,10 +224,10 @@ struct ContentView: View {
             HStack(spacing: 5) {
                 Text("EonCode")
                     .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(Color(red:0.925,green:0.925,blue:0.925))
+                    .foregroundColor(Color.primary)
                 Text(activeProject?.name ?? "Projekt")
                     .font(.system(size: 15))
-                    .foregroundColor(Color(red:0.68,green:0.68,blue:0.68))
+                    .foregroundColor(Color.secondary)
                     .lineLimit(1)
             }
 
@@ -235,20 +235,20 @@ struct ContentView: View {
             HStack(spacing: 5) {
                 Text("EonCode")
                     .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(Color(red:0.925,green:0.925,blue:0.925))
+                    .foregroundColor(Color.primary)
                 Text("Webb")
                     .font(.system(size: 15))
-                    .foregroundColor(Color(red:0.68,green:0.68,blue:0.68))
+                    .foregroundColor(Color.secondary)
             }
 
         case .artifacts:
             HStack(spacing: 5) {
                 Text("EonCode")
                     .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(Color(red:0.925,green:0.925,blue:0.925))
+                    .foregroundColor(Color.primary)
                 Text("Artefakter")
                     .font(.system(size: 15))
-                    .foregroundColor(Color(red:0.68,green:0.68,blue:0.68))
+                    .foregroundColor(Color.secondary)
             }
 
         case .plan:
@@ -258,14 +258,14 @@ struct ContentView: View {
                 HStack(spacing: 5) {
                     Text("EonCode")
                         .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(Color(red:0.925,green:0.925,blue:0.925))
+                        .foregroundColor(Color.primary)
                     Text(planMgr.activePlan?.title ?? "Planera")
                         .font(.system(size: 15))
-                        .foregroundColor(Color(red:0.68,green:0.68,blue:0.68))
+                        .foregroundColor(Color.secondary)
                         .lineLimit(1)
                     Image(systemName: "chevron.down")
                         .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(Color(red:0.5,green:0.5,blue:0.5))
+                        .foregroundColor(Color.secondary.opacity(0.6))
                 }
                 .contentShape(Rectangle())
             }
@@ -275,10 +275,10 @@ struct ContentView: View {
             HStack(spacing: 5) {
                 Text("EonCode")
                     .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(Color(red:0.925,green:0.925,blue:0.925))
+                    .foregroundColor(Color.primary)
                 Text("GitHub")
                     .font(.system(size: 15))
-                    .foregroundColor(Color(red:0.68,green:0.68,blue:0.68))
+                    .foregroundColor(Color.secondary)
             }
         }
     }
@@ -292,29 +292,29 @@ struct ContentView: View {
             Button { _ = chatMgr.newConversation() } label: {
                 Image(systemName: "square.and.pencil")
                     .font(.system(size: 17))
-                    .foregroundColor(Color(red:0.68,green:0.68,blue:0.68))
+                    .foregroundColor(Color.secondary)
             }
 
         case .project:
             HStack(spacing: 4) {
                 Circle()
-                    .fill(statusBroadcaster.remoteMacIsOnline ? Color.green : Color(red:0.5,green:0.5,blue:0.5))
+                    .fill(statusBroadcaster.remoteMacIsOnline ? Color.green : Color.secondary.opacity(0.6))
                     .frame(width: 6, height: 6)
                 Text(statusBroadcaster.remoteMacIsOnline ? "Mac" : "Offline")
                     .font(.system(size: 11))
-                    .foregroundColor(Color(red:0.5,green:0.5,blue:0.5))
+                    .foregroundColor(Color.secondary.opacity(0.6))
             }
 
         case .browser:
             Circle()
-                .fill({ if case .working = browserAgent.status { return Color.green } else { return Color(red:0.5,green:0.5,blue:0.5).opacity(0.4) } }())
+                .fill({ if case .working = browserAgent.status { return Color.green } else { return Color.secondary.opacity(0.6).opacity(0.4) } }())
                 .frame(width: 7, height: 7)
 
         case .plan:
             Button { _ = planMgr.newPlan() } label: {
                 Image(systemName: "square.and.pencil")
                     .font(.system(size: 17))
-                    .foregroundColor(Color(red:0.68,green:0.68,blue:0.68))
+                    .foregroundColor(Color.secondary)
             }
 
         default:

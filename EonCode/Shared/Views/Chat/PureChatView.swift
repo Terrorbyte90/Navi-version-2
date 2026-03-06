@@ -218,13 +218,13 @@ struct PureChatView: View {
                     HStack(spacing: 5) {
                         Text("EonCode")
                             .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(Color(red:0.925,green:0.925,blue:0.925))
+                            .foregroundColor(Color.primary)
                         Text(conv.model.displayName)
                             .font(.system(size: 14))
-                            .foregroundColor(Color(red:0.68,green:0.68,blue:0.68))
+                            .foregroundColor(Color.secondary)
                         Image(systemName: "chevron.down")
                             .font(.system(size: 10, weight: .medium))
-                            .foregroundColor(Color(red:0.5,green:0.5,blue:0.5))
+                            .foregroundColor(Color.secondary.opacity(0.6))
                     }
                     .padding(.horizontal, 4)
                 }
@@ -233,10 +233,10 @@ struct PureChatView: View {
                 HStack(spacing: 5) {
                     Text("EonCode")
                         .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(Color(red:0.925,green:0.925,blue:0.925))
+                        .foregroundColor(Color.primary)
                     Text("Chatt")
                         .font(.system(size: 14))
-                        .foregroundColor(Color(red:0.68,green:0.68,blue:0.68))
+                        .foregroundColor(Color.secondary)
                 }
             }
 
@@ -246,13 +246,13 @@ struct PureChatView: View {
             if costTracker.sessionSEK > 0 {
                 Text(costTracker.formattedSession().components(separatedBy: " (").first ?? "")
                     .font(.system(size: 11, design: .monospaced))
-                    .foregroundColor(Color(red:0.5,green:0.5,blue:0.5))
+                    .foregroundColor(Color.secondary.opacity(0.6))
             }
 
             Button { _ = manager.newConversation() } label: {
                 Image(systemName: "square.and.pencil")
                     .font(.system(size: 14))
-                    .foregroundColor(Color(red:0.68,green:0.68,blue:0.68))
+                    .foregroundColor(Color.secondary)
                     .frame(width: 28, height: 28)
                     .contentShape(Rectangle())
             }
@@ -285,7 +285,7 @@ struct PureChatView: View {
                 VStack(spacing: 5) {
                     Text("Hur kan jag hjälpa dig?")
                         .font(.system(size: 22, weight: .semibold))
-                        .foregroundColor(Color(red:0.925,green:0.925,blue:0.925))
+                        .foregroundColor(Color.primary)
                 }
             }
             Spacer()
@@ -337,16 +337,16 @@ struct PureChatView: View {
                 Button { isShowingImagePicker = true } label: {
                     Image(systemName: "plus")
                         .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(Color(red:0.68,green:0.68,blue:0.68))
+                        .foregroundColor(Color.secondary)
                         .frame(width: 30, height: 30)
-                        .background(Color(red:0.16,green:0.16,blue:0.16), in: Circle())
+                        .background(Color.surfaceHover, in: Circle())
                 }
                 .buttonStyle(.plain)
 
                 // Text field
                 TextField("Skicka ett meddelande till EonCode", text: $inputText, axis: .vertical)
                     .font(.callout)
-                    .foregroundColor(Color(red:0.925,green:0.925,blue:0.925))
+                    .foregroundColor(Color.primary)
                     .lineLimit(1...6)
                     .textFieldStyle(.plain)
                     .padding(.vertical, 10)
@@ -357,24 +357,24 @@ struct PureChatView: View {
                     if manager.isStreaming {
                         ZStack {
                             Circle()
-                                .fill(Color(red:0.925,green:0.925,blue:0.925))
+                                .fill(Color.primary)
                                 .frame(width: 30, height: 30)
                             RoundedRectangle(cornerRadius: 3)
-                                .fill(Color(red:0.13,green:0.13,blue:0.13))
+                                .fill(Color.chatBackground)
                                 .frame(width: 10, height: 10)
                         }
                     } else {
                         ZStack {
                             Circle()
                                 .fill(inputText.isBlank && selectedImages.isEmpty
-                                      ? Color(red:0.28,green:0.28,blue:0.28)
-                                      : Color(red:0.925,green:0.925,blue:0.925))
+                                      ? Color.secondary.opacity(0.25)
+                                      : Color.primary)
                                 .frame(width: 30, height: 30)
                             Image(systemName: "arrow.up")
                                 .font(.system(size: 13, weight: .semibold))
                                 .foregroundColor(inputText.isBlank && selectedImages.isEmpty
-                                                 ? Color(red:0.5,green:0.5,blue:0.5)
-                                                 : Color(red:0.13,green:0.13,blue:0.13))
+                                                 ? Color.secondary.opacity(0.6)
+                                                 : Color.chatBackground)
                         }
                     }
                 }
@@ -386,10 +386,10 @@ struct PureChatView: View {
             .padding(.vertical, 4)
             .background(
                 RoundedRectangle(cornerRadius: 22)
-                    .fill(Color(red:0.185,green:0.185,blue:0.185))
+                    .fill(Color.userBubble)
                     .overlay(
                         RoundedRectangle(cornerRadius: 22)
-                            .strokeBorder(Color(red:0.25,green:0.25,blue:0.25), lineWidth: 0.5)
+                            .strokeBorder(Color.inputBorder, lineWidth: 0.5)
                     )
             )
 
@@ -397,12 +397,12 @@ struct PureChatView: View {
             HStack {
                 Text("EonCode kan göra misstag. Kontrollera viktig information.")
                     .font(.caption2)
-                    .foregroundColor(Color(red:0.5,green:0.5,blue:0.5))
+                    .foregroundColor(Color.secondary.opacity(0.6))
                 Spacer()
                 if costTracker.sessionSEK > 0 {
                     Text(costTracker.formattedSession().components(separatedBy: " (").first ?? "")
                         .font(.system(size: 10, design: .monospaced))
-                        .foregroundColor(Color(red:0.5,green:0.5,blue:0.5).opacity(0.6))
+                        .foregroundColor(Color.secondary.opacity(0.6).opacity(0.6))
                 }
             }
         }
@@ -460,10 +460,9 @@ struct PureChatBubble: View {
 
     var isUser: Bool { message.role == .user }
 
-    // ChatGPT exact palette
-    private let userBubbleColor = Color(red: 0.185, green: 0.185, blue: 0.185)
-    private let textPrimary = Color(red: 0.925, green: 0.925, blue: 0.925)
-    private let textMuted = Color(red: 0.5, green: 0.5, blue: 0.5)
+    private let userBubbleColor = Color.userBubble
+    private let textPrimary = Color.primary
+    private let textMuted = Color.secondary
 
     var body: some View {
         if isUser {

@@ -67,7 +67,7 @@ struct ChatHistorySidebar: View {
                     }
                     Text("EonCode")
                         .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(Color(red:0.925,green:0.925,blue:0.925))
+                        .foregroundColor(Color.primary)
                 }
                 Spacer()
                 // New item button — context-aware
@@ -91,7 +91,7 @@ struct ChatHistorySidebar: View {
                 } label: {
                     Image(systemName: newItemIcon)
                         .font(.system(size: 16))
-                        .foregroundColor(Color(red:0.68,green:0.68,blue:0.68))
+                        .foregroundColor(Color.secondary)
                         .frame(width: 36, height: 36)
                 }
                 .buttonStyle(.plain)
@@ -105,14 +105,14 @@ struct ChatHistorySidebar: View {
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass")
                     .font(.system(size: 13))
-                    .foregroundColor(Color(red:0.5,green:0.5,blue:0.5))
+                    .foregroundColor(Color.secondary.opacity(0.6))
                 TextField("Sök", text: $searchText)
                     .font(.system(size: 14))
-                    .foregroundColor(Color(red:0.925,green:0.925,blue:0.925))
+                    .foregroundColor(Color.primary)
                 if !searchText.isEmpty {
                     Button { searchText = "" } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(Color(red:0.5,green:0.5,blue:0.5))
+                            .foregroundColor(Color.secondary.opacity(0.6))
                             .font(.system(size: 13))
                     }
                     .buttonStyle(.plain)
@@ -120,7 +120,7 @@ struct ChatHistorySidebar: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background(Color(red:0.16,green:0.16,blue:0.16), in: RoundedRectangle(cornerRadius: 8))
+            .background(Color.surfaceHover, in: RoundedRectangle(cornerRadius: 8))
             .padding(.horizontal, 10)
             .padding(.bottom, 8)
         }
@@ -587,14 +587,14 @@ struct ChatHistorySidebar: View {
     private func historyRowContent(title: String, subtitle: String, isActive: Bool) -> some View {
         Text(title)
             .font(.system(size: 14))
-            .foregroundColor(isActive ? Color(red:0.925,green:0.925,blue:0.925) : Color(red:0.68,green:0.68,blue:0.68))
+            .foregroundColor(isActive ? Color.primary : Color.secondary)
             .lineLimit(1)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
             .background(
                 RoundedRectangle(cornerRadius: 8)
-                    .fill(isActive ? Color(red:0.16,green:0.16,blue:0.16) : Color.clear)
+                    .fill(isActive ? Color.surfaceHover : Color.clear)
             )
     }
 
@@ -603,10 +603,10 @@ struct ChatHistorySidebar: View {
         VStack(spacing: 8) {
             Image(systemName: icon)
                 .font(.system(size: 22))
-                .foregroundColor(Color(red:0.5,green:0.5,blue:0.5).opacity(0.3))
+                .foregroundColor(Color.secondary.opacity(0.6).opacity(0.3))
             Text(text)
                 .font(.system(size: 12))
-                .foregroundColor(Color(red:0.5,green:0.5,blue:0.5).opacity(0.5))
+                .foregroundColor(Color.secondary.opacity(0.6).opacity(0.5))
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 24)
@@ -619,16 +619,16 @@ struct ChatHistorySidebar: View {
             HStack(spacing: 10) {
                 Image(systemName: icon)
                     .font(.system(size: 14))
-                    .foregroundColor(isActive ? Color(red:0.925,green:0.925,blue:0.925) : Color(red:0.68,green:0.68,blue:0.68))
+                    .foregroundColor(isActive ? Color.primary : Color.secondary)
                     .frame(width: 20)
                 Text(label)
                     .font(.system(size: 14, weight: isActive ? .semibold : .regular))
-                    .foregroundColor(isActive ? Color(red:0.925,green:0.925,blue:0.925) : Color(red:0.68,green:0.68,blue:0.68))
+                    .foregroundColor(isActive ? Color.primary : Color.secondary)
                 Spacer()
                 if let badge {
                     Text(badge)
                         .font(.system(size: 10, weight: .semibold))
-                        .foregroundColor(Color(red:0.5,green:0.5,blue:0.5))
+                        .foregroundColor(Color.secondary.opacity(0.6))
                         .padding(.horizontal, 6)
                         .padding(.vertical, 1)
                         .background(Color.white.opacity(0.07))
@@ -639,7 +639,7 @@ struct ChatHistorySidebar: View {
             .padding(.vertical, 8)
             .background(
                 RoundedRectangle(cornerRadius: 8)
-                    .fill(isActive ? Color(red:0.16,green:0.16,blue:0.16) : Color.clear)
+                    .fill(isActive ? Color.surfaceHover : Color.clear)
             )
         }
         .buttonStyle(.plain)
@@ -649,7 +649,7 @@ struct ChatHistorySidebar: View {
     private func sectionHeader(_ title: String) -> some View {
         Text(title.uppercased())
             .font(.system(size: 10, weight: .semibold))
-            .foregroundColor(Color(red:0.5,green:0.5,blue:0.5))
+            .foregroundColor(Color.secondary.opacity(0.6))
             .padding(.horizontal, 10)
             .padding(.top, 12)
             .padding(.bottom, 3)
@@ -674,14 +674,14 @@ struct ChatHistorySidebar: View {
                 VStack(alignment: .leading, spacing: 1) {
                     Text("EonCode")
                         .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(Color(red:0.925,green:0.925,blue:0.925))
+                        .foregroundColor(Color.primary)
                     HStack(spacing: 4) {
                         Circle()
-                            .fill(statusBroadcaster.remoteMacIsOnline ? Color.green : Color(red:0.5,green:0.5,blue:0.5))
+                            .fill(statusBroadcaster.remoteMacIsOnline ? Color.green : Color.secondary.opacity(0.6))
                             .frame(width: 5, height: 5)
                         Text(statusBroadcaster.remoteMacIsOnline ? "Mac ansluten" : "Offline")
                             .font(.system(size: 10))
-                            .foregroundColor(Color(red:0.5,green:0.5,blue:0.5))
+                            .foregroundColor(Color.secondary.opacity(0.6))
                     }
                 }
 
@@ -690,7 +690,7 @@ struct ChatHistorySidebar: View {
                 Button { showSettings = true } label: {
                     Image(systemName: "ellipsis")
                         .font(.system(size: 14))
-                        .foregroundColor(Color(red:0.5,green:0.5,blue:0.5))
+                        .foregroundColor(Color.secondary.opacity(0.6))
                         .frame(width: 36, height: 36)
                         .contentShape(Rectangle())
                 }

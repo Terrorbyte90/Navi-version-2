@@ -576,13 +576,13 @@ struct StreamingBubble: View {
                 HStack(alignment: .lastTextBaseline, spacing: 0) {
                     Text(text.suffix(3000))
                         .font(.callout)
-                        .foregroundColor(Color(red:0.925,green:0.925,blue:0.925))
+                        .foregroundColor(Color.primary)
                         .lineSpacing(4)
                         .textSelection(.enabled)
 
                     // Blinking cursor
                     RoundedRectangle(cornerRadius: 1)
-                        .fill(Color(red:0.925,green:0.925,blue:0.925).opacity(0.7))
+                        .fill(Color.primary.opacity(0.7))
                         .frame(width: 2, height: 15)
                         .opacity(cursorVisible ? 1 : 0)
                         .padding(.leading, 2)
@@ -610,7 +610,7 @@ struct TypingIndicator: View {
         HStack(spacing: 5) {
             ForEach(0..<3, id: \.self) { i in
                 Circle()
-                    .fill(Color(red:0.68,green:0.68,blue:0.68))
+                    .fill(Color.secondary)
                     .frame(width: 6, height: 6)
                     .scaleEffect(animating ? 1.15 : 0.7)
                     .opacity(animating ? 1.0 : 0.35)

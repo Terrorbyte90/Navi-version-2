@@ -27,7 +27,6 @@ struct EonCodeApp: App {
         #if os(macOS)
         WindowGroup {
             ContentView()
-                .preferredColorScheme(.dark)
                 .frame(
                     minWidth: Constants.UI.minWindowWidth,
                     minHeight: Constants.UI.minWindowHeight
@@ -42,7 +41,6 @@ struct EonCodeApp: App {
         #else
         WindowGroup {
             ContentView()
-                .preferredColorScheme(.dark)
                 .environmentObject(projectStore)
         }
         #endif
