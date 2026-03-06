@@ -1,6 +1,6 @@
 import SwiftUI
 
-// MARK: - Agent View (Autonomous agents)
+// MARK: - Agent View
 
 struct AgentView: View {
     @StateObject private var runner = AutonomousAgentRunner.shared
@@ -21,13 +21,10 @@ struct AgentView: View {
         #endif
     }
 
-    // MARK: - macOS
-
     #if os(macOS)
     var macLayout: some View {
         HSplitView {
-            agentList
-                .frame(minWidth: 260, maxWidth: 320)
+            agentList.frame(minWidth: 260, maxWidth: 320)
             if let agent = selectedAgent {
                 AgentDetailView(agentID: agent.id)
             } else {
@@ -37,8 +34,6 @@ struct AgentView: View {
     }
     #endif
 
-    // MARK: - iOS
-
     var iOSLayout: some View {
         NavigationView {
             agentList
@@ -47,9 +42,7 @@ struct AgentView: View {
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .navigationBarTrailing) {
-                        Button { showCreateSheet = true } label: {
-                            Image(systemName: "plus")
-                        }
+                        Button { showCreateSheet = true } label: { Image(systemName: "plus") }
                     }
                 }
                 #endif
@@ -63,7 +56,6 @@ struct AgentView: View {
 
     var agentList: some View {
         VStack(spacing: 0) {
-            // Header
             HStack {
                 Text("Agenter")
                     .font(.system(size: 13, weight: .semibold))
@@ -78,30 +70,22 @@ struct AgentView: View {
                 }
                 .buttonStyle(.plain)
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-
+            .padding(.horizontal, 16).padding(.vertical, 10)
             Divider()
 
             if runner.agents.isEmpty {
                 VStack(spacing: 12) {
                     Image(systemName: "cpu.fill")
-                        .font(.system(size: 32))
-                        .foregroundColor(.secondary.opacity(0.3))
+                        .font(.system(size: 32)).foregroundColor(.secondary.opacity(0.3))
                     Text("Inga agenter")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(.secondary)
-                    Text("Skapa en agent och ge den ett mål att arbeta mot autonomt.")
-                        .font(.system(size: 12))
-                        .foregroundColor(.secondary.opacity(0.7))
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 20)
+                        .font(.system(size: 14, weight: .medium)).foregroundColor(.secondary)
+                    Text("Skapa en agent och ge den ett långsiktigt mål att arbeta mot autonomt.")
+                        .font(.system(size: 12)).foregroundColor(.secondary.opacity(0.7))
+                        .multilineTextAlignment(.center).padding(.horizontal, 20)
                     Button("Skapa agent") { showCreateSheet = true }
-                        .buttonStyle(.borderedProminent)
-                        .controlSize(.small)
+                        .buttonStyle(.borderedProminent).controlSize(.small)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .padding()
+                .frame(maxWidth: .infinity, maxHeight: .infinity).padding()
             } else {
                 ScrollView {
                     LazyVStack(spacing: 0) {
@@ -129,16 +113,12 @@ struct AgentView: View {
     var agentEmptyState: some View {
         VStack(spacing: 16) {
             Image(systemName: "cpu.fill")
-                .font(.system(size: 48))
-                .foregroundColor(.secondary.opacity(0.2))
+                .font(.system(size: 48)).foregroundColor(.secondary.opacity(0.2))
             Text("Välj en agent")
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundColor(.secondary)
-            Text("Välj en agent i listan för att se dess aktivitet och logg i realtid.")
-                .font(.system(size: 14))
-                .foregroundColor(.secondary.opacity(0.7))
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: 300)
+                .font(.system(size: 18, weight: .semibold)).foregroundColor(.secondary)
+            Text("Välj en agent i listan för att se aktivitet, logg och inställningar.")
+                .font(.system(size: 14)).foregroundColor(.secondary.opacity(0.7))
+                .multilineTextAlignment(.center).frame(maxWidth: 300)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.chatBackground)
@@ -154,7 +134,6 @@ struct AgentRowView: View {
     let onStart: () -> Void
     let onPause: () -> Void
     let onDelete: () -> Void
-
     @State private var pulsing = false
 
     var statusColor: Color {
@@ -170,69 +149,54 @@ struct AgentRowView: View {
     var body: some View {
         Button(action: onSelect) {
             HStack(spacing: 12) {
-                // Status indicator
                 ZStack {
-                    Circle()
-                        .fill(statusColor.opacity(0.15))
-                        .frame(width: 32, height: 32)
+                    Circle().fill(statusColor.opacity(0.15)).frame(width: 34, height: 34)
                         .scaleEffect(pulsing && agent.status.isActive ? 1.2 : 1.0)
                     Image(systemName: agent.status.isActive ? "cpu.fill" : "cpu")
-                        .font(.system(size: 14))
-                        .foregroundColor(statusColor)
+                        .font(.system(size: 14)).foregroundColor(statusColor)
                 }
                 .onAppear {
                     if agent.status.isActive {
-                        withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
-                            pulsing = true
-                        }
+                        withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) { pulsing = true }
                     }
                 }
                 .onChange(of: agent.status.isActive) { active in
-                    if active {
-                        withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) { pulsing = true }
-                    } else { pulsing = false }
+                    if active { withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) { pulsing = true } }
+                    else { pulsing = false }
                 }
 
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 6) {
                         Text(agent.name)
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundColor(.primary)
-                            .lineLimit(1)
+                            .font(.system(size: 13, weight: .semibold)).foregroundColor(.primary).lineLimit(1)
                         Spacer()
                         Text(agent.status.displayName)
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundColor(statusColor)
+                            .font(.system(size: 10, weight: .medium)).foregroundColor(statusColor)
                             .padding(.horizontal, 6).padding(.vertical, 2)
                             .background(statusColor.opacity(0.12), in: Capsule())
                     }
-
                     if !agent.currentTaskDescription.isEmpty {
                         Text(agent.currentTaskDescription)
-                            .font(.system(size: 11))
-                            .foregroundColor(.secondary)
-                            .lineLimit(2)
-                    } else if let projectName = agent.projectName {
-                        Text(projectName)
-                            .font(.system(size: 11))
-                            .foregroundColor(.secondary)
-                            .lineLimit(1)
+                            .font(.system(size: 11)).foregroundColor(.secondary).lineLimit(2)
+                    } else if let pn = agent.projectName {
+                        Text(pn).font(.system(size: 11)).foregroundColor(.secondary).lineLimit(1)
                     }
-
+                    // Cost row
                     HStack(spacing: 8) {
                         Text("Iter. \(agent.iterationCount)")
-                            .font(.system(size: 10, design: .monospaced))
-                            .foregroundColor(.secondary.opacity(0.6))
-                        if agent.totalCostSEK > 0 {
-                            Text(String(format: "%.2f kr", agent.totalCostSEK))
-                                .font(.system(size: 10, design: .monospaced))
-                                .foregroundColor(.secondary.opacity(0.6))
+                            .font(.system(size: 10, design: .monospaced)).foregroundColor(.secondary.opacity(0.6))
+                        if agent.grandTotalCostSEK > 0 {
+                            Text(String(format: "%.3f kr", agent.grandTotalCostSEK))
+                                .font(.system(size: 10, design: .monospaced)).foregroundColor(.secondary.opacity(0.6))
+                        }
+                        if agent.assignedWorkers > 1 {
+                            Label("\(agent.assignedWorkers) workers", systemImage: "person.2.fill")
+                                .font(.system(size: 9)).foregroundColor(.secondary.opacity(0.5))
                         }
                     }
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
+            .padding(.horizontal, 16).padding(.vertical, 10)
             .background(isSelected ? Color.surfaceHover : Color.clear)
             .contentShape(Rectangle())
         }
@@ -256,145 +220,157 @@ struct AgentDetailView: View {
     @StateObject private var runner = AutonomousAgentRunner.shared
     @State private var selectedTab: DetailTab = .log
     @State private var showEditSheet = false
-    @State private var logScrollProxy: ScrollViewProxy? = nil
 
     enum DetailTab: String, CaseIterable {
         case log = "Logg"
-        case goal = "Mål"
+        case settings = "Inställningar"
         case stats = "Statistik"
     }
 
-    var agent: AgentDefinition? {
-        runner.agents.first { $0.id == agentID }
-    }
+    var agent: AgentDefinition? { runner.agents.first { $0.id == agentID } }
 
     var body: some View {
-        guard let agent = agent else {
-            return AnyView(Text("Agent borttagen").foregroundColor(.secondary).frame(maxWidth: .infinity, maxHeight: .infinity))
+        if let agent = agent {
+            VStack(spacing: 0) {
+                agentHeader(agent: agent)
+                costBanner(agent: agent)
+                Divider()
+                tabBar
+                Divider()
+                tabContent(agent: agent)
+            }
+            .background(Color.chatBackground)
+            .sheet(isPresented: $showEditSheet) {
+                EditAgentSheet(agent: agent)
+            }
+        } else {
+            Text("Agent borttagen").foregroundColor(.secondary)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        return AnyView(content(agent: agent))
     }
 
-    @ViewBuilder
-    func content(agent: AgentDefinition) -> some View {
-        VStack(spacing: 0) {
-            // Header
-            agentHeader(agent: agent)
-            Divider()
-
-            // Tab bar
-            HStack(spacing: 0) {
-                ForEach(DetailTab.allCases, id: \.self) { tab in
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.15)) { selectedTab = tab }
-                    } label: {
-                        Text(tab.rawValue)
-                            .font(.system(size: 13, weight: selectedTab == tab ? .semibold : .regular))
-                            .foregroundColor(selectedTab == tab ? .primary : .secondary)
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 10)
-                            .overlay(alignment: .bottom) {
-                                if selectedTab == tab {
-                                    Rectangle()
-                                        .fill(Color.accentEon)
-                                        .frame(height: 2)
-                                }
-                            }
-                    }
-                    .buttonStyle(.plain)
-                }
-                Spacer()
-            }
-            Divider()
-
-            // Content
-            switch selectedTab {
-            case .log:   agentLogView(agent: agent)
-            case .goal:  agentGoalView(agent: agent)
-            case .stats: agentStatsView(agent: agent)
-            }
-        }
-        .background(Color.chatBackground)
-    }
+    // MARK: - Header
 
     @ViewBuilder
     func agentHeader(agent: AgentDefinition) -> some View {
         HStack(spacing: 14) {
-            // Avatar with pulsing ring
             ZStack {
-                Circle()
-                    .stroke(agentStatusColor(agent).opacity(0.3), lineWidth: 2)
-                    .frame(width: 44, height: 44)
-                Circle()
-                    .fill(agentStatusColor(agent).opacity(0.1))
-                    .frame(width: 40, height: 40)
-                Image(systemName: "cpu.fill")
-                    .font(.system(size: 18))
-                    .foregroundColor(agentStatusColor(agent))
+                Circle().stroke(statusColor(agent).opacity(0.3), lineWidth: 2).frame(width: 44, height: 44)
+                Circle().fill(statusColor(agent).opacity(0.1)).frame(width: 40, height: 40)
+                Image(systemName: "cpu.fill").font(.system(size: 18)).foregroundColor(statusColor(agent))
             }
-
             VStack(alignment: .leading, spacing: 4) {
-                Text(agent.name)
-                    .font(.system(size: 16, weight: .semibold))
+                Text(agent.name).font(.system(size: 16, weight: .semibold))
                 if !agent.currentTaskDescription.isEmpty {
                     Text(agent.currentTaskDescription)
-                        .font(.system(size: 12))
-                        .foregroundColor(.secondary)
-                        .lineLimit(2)
+                        .font(.system(size: 12)).foregroundColor(.secondary).lineLimit(2)
                 }
             }
-
             Spacer()
-
-            // Controls
             HStack(spacing: 8) {
-                if agent.status.isActive {
-                    Button { runner.pause(agentID) } label: {
-                        Label("Pausa", systemImage: "pause.fill")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(.orange)
-                            .padding(.horizontal, 12).padding(.vertical, 7)
-                            .background(Color.orange.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
-                    }
-                    .buttonStyle(.plain)
-                } else if agent.status == .paused || agent.status == .idle {
-                    Button { runner.start(agentID) } label: {
-                        Label("Starta", systemImage: "play.fill")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(.green)
-                            .padding(.horizontal, 12).padding(.vertical, 7)
-                            .background(Color.green.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
-                    }
-                    .buttonStyle(.plain)
-                } else if agent.status == .completed || agent.status == .failed {
-                    Button { runner.restart(agentID) } label: {
-                        Label("Starta om", systemImage: "arrow.clockwise")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(.accentEon)
-                            .padding(.horizontal, 12).padding(.vertical, 7)
-                            .background(Color.accentEon.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
-                    }
-                    .buttonStyle(.plain)
-                }
-
+                controlButton(agent: agent)
                 Button { showEditSheet = true } label: {
-                    Image(systemName: "ellipsis")
-                        .font(.system(size: 14))
-                        .foregroundColor(.secondary)
-                        .frame(width: 28, height: 28)
+                    Image(systemName: "gearshape")
+                        .font(.system(size: 14)).foregroundColor(.secondary)
+                        .frame(width: 30, height: 30)
                         .background(Color.surfaceHover, in: Circle())
                 }
                 .buttonStyle(.plain)
             }
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 14)
-        .sheet(isPresented: $showEditSheet) {
-            if let a = agent as AgentDefinition? {
-                EditAgentSheet(agent: a)
+        .padding(.horizontal, 20).padding(.vertical, 14)
+    }
+
+    // MARK: - Cost banner (always visible)
+
+    @ViewBuilder
+    func costBanner(agent: AgentDefinition) -> some View {
+        HStack(spacing: 0) {
+            costCell(
+                title: "Session",
+                value: String(format: "%.4f kr", agent.sessionCostSEK),
+                subtitle: "\(agent.sessionTokensUsed) tok",
+                color: .accentEon
+            )
+            Divider().frame(height: 32)
+            costCell(
+                title: "Workers",
+                value: String(format: "%.4f kr", agent.workerCostSEK),
+                subtitle: "\(agent.workerTokensUsed) tok",
+                color: .purple
+            )
+            Divider().frame(height: 32)
+            costCell(
+                title: "Totalt",
+                value: String(format: "%.4f kr", agent.grandTotalCostSEK),
+                subtitle: "\(agent.grandTotalTokens) tok",
+                color: .green,
+                bold: true
+            )
+            Divider().frame(height: 32)
+            costCell(
+                title: "Iter.",
+                value: "\(agent.iterationCount)",
+                subtitle: agent.maxIterations > 0 ? "av \(agent.maxIterations)" : "obegränsat",
+                color: .orange
+            )
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 8)
+        .background(Color.surfaceHover)
+    }
+
+    @ViewBuilder
+    func costCell(title: String, value: String, subtitle: String, color: Color, bold: Bool = false) -> some View {
+        VStack(spacing: 2) {
+            Text(title)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundColor(.secondary)
+            Text(value)
+                .font(.system(size: 13, weight: bold ? .bold : .semibold, design: .monospaced))
+                .foregroundColor(color)
+            Text(subtitle)
+                .font(.system(size: 9, design: .monospaced))
+                .foregroundColor(.secondary.opacity(0.6))
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 4)
+    }
+
+    // MARK: - Tab bar
+
+    var tabBar: some View {
+        HStack(spacing: 0) {
+            ForEach(DetailTab.allCases, id: \.self) { tab in
+                Button {
+                    withAnimation(.easeInOut(duration: 0.15)) { selectedTab = tab }
+                } label: {
+                    Text(tab.rawValue)
+                        .font(.system(size: 13, weight: selectedTab == tab ? .semibold : .regular))
+                        .foregroundColor(selectedTab == tab ? .primary : .secondary)
+                        .padding(.horizontal, 16).padding(.vertical, 10)
+                        .overlay(alignment: .bottom) {
+                            if selectedTab == tab {
+                                Rectangle().fill(Color.accentEon).frame(height: 2)
+                            }
+                        }
+                }
+                .buttonStyle(.plain)
             }
+            Spacer()
         }
     }
+
+    @ViewBuilder
+    func tabContent(agent: AgentDefinition) -> some View {
+        switch selectedTab {
+        case .log:      agentLogView(agent: agent)
+        case .settings: agentSettingsView(agent: agent)
+        case .stats:    agentStatsView(agent: agent)
+        }
+    }
+
+    // MARK: - Log tab
 
     @ViewBuilder
     func agentLogView(agent: AgentDefinition) -> some View {
@@ -402,19 +378,14 @@ struct AgentDetailView: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     ForEach(agent.runLog) { entry in
-                        AgentLogEntryRow(entry: entry)
-                            .id(entry.id)
+                        AgentLogEntryRow(entry: entry).id(entry.id)
                     }
-
-                    // Live streaming indicator
                     if runner.streamingAgentID == agentID && !runner.streamingText.isEmpty {
-                        AgentStreamingRow(text: runner.streamingText)
-                            .id("streaming")
+                        AgentStreamingRow(text: runner.streamingText).id("streaming")
                     }
                 }
                 .padding(.vertical, 8)
             }
-            .onAppear { logScrollProxy = proxy }
             .onChange(of: agent.runLog.count) { _ in
                 withAnimation { proxy.scrollTo(agent.runLog.last?.id, anchor: .bottom) }
             }
@@ -424,92 +395,105 @@ struct AgentDetailView: View {
         }
     }
 
+    // MARK: - Settings tab
+
     @ViewBuilder
-    func agentGoalView(agent: AgentDefinition) -> some View {
+    func agentSettingsView(agent: AgentDefinition) -> some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Label("Mål", systemImage: "target")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(.secondary)
-                    Text(agent.goal)
-                        .font(.system(size: 14))
-                        .foregroundColor(.primary)
-                        .lineSpacing(4)
-                        .textSelection(.enabled)
-                        .padding(14)
-                        .background(Color.surfaceHover, in: RoundedRectangle(cornerRadius: 10))
-                }
-
-                if let projectName = agent.projectName {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Label("Projekt", systemImage: "folder")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundColor(.secondary)
-                        Text(projectName)
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(.primary)
-                    }
-                }
-
-                VStack(alignment: .leading, spacing: 8) {
-                    Label("Modell", systemImage: "cpu")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(.secondary)
-                    Text(agent.model.displayName)
-                        .font(.system(size: 14))
-                        .foregroundColor(.primary)
-                }
-
-                if agent.maxIterations > 0 {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Label("Max iterationer", systemImage: "repeat")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundColor(.secondary)
-                        Text("\(agent.maxIterations)")
-                            .font(.system(size: 14))
-                            .foregroundColor(.primary)
-                    }
-                }
+            VStack(spacing: 0) {
+                AgentSettingsEditor(agentID: agentID)
             }
-            .padding(20)
         }
     }
+
+    // MARK: - Stats tab
 
     @ViewBuilder
     func agentStatsView(agent: AgentDefinition) -> some View {
         ScrollView {
-            VStack(spacing: 16) {
-                statCard(title: "Iterationer", value: "\(agent.iterationCount)", icon: "repeat", color: .accentEon)
-                statCard(title: "Tokens använda", value: "\(agent.totalTokensUsed)", icon: "text.word.spacing", color: .purple)
-                statCard(title: "Total kostnad", value: String(format: "%.4f kr", agent.totalCostSEK), icon: "dollarsign.circle", color: .green)
-                statCard(title: "Logg-poster", value: "\(agent.runLog.count)", icon: "list.bullet", color: .orange)
-                if let lastActive = agent.lastActiveAt {
-                    statCard(title: "Senast aktiv", value: RelativeDateTimeFormatter().localizedString(for: lastActive, relativeTo: Date()), icon: "clock", color: .secondary)
+            VStack(spacing: 12) {
+                // Cost breakdown card
+                VStack(alignment: .leading, spacing: 12) {
+                    Label("Kostnadsfördelning", systemImage: "dollarsign.circle.fill")
+                        .font(.system(size: 13, weight: .semibold)).foregroundColor(.secondary)
+                    HStack(spacing: 12) {
+                        costBreakdownBar(
+                            label: "Orkestrator",
+                            cost: agent.totalCostSEK,
+                            total: agent.grandTotalCostSEK,
+                            color: .accentEon
+                        )
+                        costBreakdownBar(
+                            label: "Workers",
+                            cost: agent.workerCostSEK,
+                            total: agent.grandTotalCostSEK,
+                            color: .purple
+                        )
+                    }
+                }
+                .padding(16)
+                .background(Color.surfaceHover, in: RoundedRectangle(cornerRadius: 12))
+
+                statCard("Iterationer",         "\(agent.iterationCount)",                                      "repeat",           .accentEon)
+                statCard("Orkestrator-tokens",  "\(agent.totalTokensUsed)",                                     "text.word.spacing", .blue)
+                statCard("Worker-tokens",       "\(agent.workerTokensUsed)",                                    "person.2.fill",    .purple)
+                statCard("Totala tokens",       "\(agent.grandTotalTokens)",                                    "sum",              .primary)
+                statCard("Orkestrator-kostnad", String(format: "%.5f kr", agent.totalCostSEK),                  "dollarsign",       .accentEon)
+                statCard("Worker-kostnad",      String(format: "%.5f kr", agent.workerCostSEK),                 "dollarsign.circle", .purple)
+                statCard("Total kostnad",       String(format: "%.5f kr", agent.grandTotalCostSEK),             "dollarsign.circle.fill", .green)
+                statCard("Logg-poster",         "\(agent.runLog.count)",                                        "list.bullet",      .orange)
+                if let la = agent.lastActiveAt {
+                    statCard("Senast aktiv", RelativeDateTimeFormatter().localizedString(for: la, relativeTo: Date()), "clock", .secondary)
                 }
             }
-            .padding(20)
+            .padding(16)
         }
     }
 
     @ViewBuilder
-    func statCard(title: String, value: String, icon: String, color: Color) -> some View {
+    func costBreakdownBar(label: String, cost: Double, total: Double, color: Color) -> some View {
+        let fraction = total > 0 ? cost / total : 0
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Circle().fill(color).frame(width: 8, height: 8)
+                Text(label).font(.system(size: 11)).foregroundColor(.secondary)
+                Spacer()
+                Text(String(format: "%.1f%%", fraction * 100))
+                    .font(.system(size: 11, design: .monospaced)).foregroundColor(color)
+            }
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 3).fill(Color.primary.opacity(0.06)).frame(height: 6)
+                    RoundedRectangle(cornerRadius: 3).fill(color).frame(width: geo.size.width * fraction, height: 6)
+                }
+            }
+            .frame(height: 6)
+            Text(String(format: "%.5f kr", cost))
+                .font(.system(size: 10, design: .monospaced)).foregroundColor(.secondary.opacity(0.7))
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    @ViewBuilder
+    func statCard(_ title: String, _ value: String, _ icon: String, _ color: Color) -> some View {
         HStack(spacing: 14) {
             ZStack {
-                Circle().fill(color.opacity(0.12)).frame(width: 36, height: 36)
-                Image(systemName: icon).font(.system(size: 15)).foregroundColor(color)
+                Circle().fill(color.opacity(0.12)).frame(width: 34, height: 34)
+                Image(systemName: icon).font(.system(size: 14)).foregroundColor(color)
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).font(.system(size: 12)).foregroundColor(.secondary)
-                Text(value).font(.system(size: 15, weight: .semibold)).foregroundColor(.primary)
+                Text(value).font(.system(size: 14, weight: .semibold)).foregroundColor(.primary)
             }
             Spacer()
         }
-        .padding(14)
-        .background(Color.surfaceHover, in: RoundedRectangle(cornerRadius: 12))
+        .padding(12)
+        .background(Color.surfaceHover, in: RoundedRectangle(cornerRadius: 10))
     }
 
-    func agentStatusColor(_ agent: AgentDefinition) -> Color {
+    // MARK: - Helpers
+
+    func statusColor(_ agent: AgentDefinition) -> Color {
         switch agent.status {
         case .running:   return .green
         case .paused:    return .orange
@@ -517,6 +501,340 @@ struct AgentDetailView: View {
         case .failed:    return .red
         case .idle:      return .secondary
         }
+    }
+
+    @ViewBuilder
+    func controlButton(agent: AgentDefinition) -> some View {
+        if agent.status.isActive {
+            Button { runner.pause(agentID) } label: {
+                Label("Pausa", systemImage: "pause.fill")
+                    .font(.system(size: 12, weight: .medium)).foregroundColor(.orange)
+                    .padding(.horizontal, 12).padding(.vertical, 7)
+                    .background(Color.orange.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
+            }
+            .buttonStyle(.plain)
+        } else if agent.status == .paused || agent.status == .idle {
+            Button { runner.start(agentID) } label: {
+                Label("Starta", systemImage: "play.fill")
+                    .font(.system(size: 12, weight: .medium)).foregroundColor(.green)
+                    .padding(.horizontal, 12).padding(.vertical, 7)
+                    .background(Color.green.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
+            }
+            .buttonStyle(.plain)
+        } else {
+            Button { runner.restart(agentID) } label: {
+                Label("Starta om", systemImage: "arrow.clockwise")
+                    .font(.system(size: 12, weight: .medium)).foregroundColor(.accentEon)
+                    .padding(.horizontal, 12).padding(.vertical, 7)
+                    .background(Color.accentEon.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
+            }
+            .buttonStyle(.plain)
+        }
+    }
+}
+
+// MARK: - Agent Settings Editor (inline, live-saving)
+
+struct AgentSettingsEditor: View {
+    let agentID: UUID
+    @StateObject private var runner = AutonomousAgentRunner.shared
+    @StateObject private var projectStore = ProjectStore.shared
+
+    // Local state mirrors agent settings
+    @State private var name = ""
+    @State private var goal = ""
+    @State private var model: ClaudeModel = .sonnet45
+    @State private var workerModel: ClaudeModel = .haiku
+    @State private var assignedWorkers = 2
+    @State private var maxTokensPerIteration = 8000
+    @State private var maxIterations = 0
+    @State private var iterationDelaySeconds = 1.0
+    @State private var autoRestartOnFailure = false
+    @State private var pauseOnUserQuestion = true
+    @State private var verboseLogging = false
+    @State private var autoCommitToGitHub = false
+    @State private var githubBranch = "main"
+    @State private var systemPromptAddition = ""
+    @State private var maxHistoryMessages = 30
+    @State private var memoryEnabled = true
+    @State private var notifyOnCompletion = true
+    @State private var notifyOnFailure = true
+    @State private var notifyOnUserQuestion = true
+    @State private var selectedProjectID: UUID? = nil
+    @State private var loaded = false
+
+    var agent: AgentDefinition? { runner.agents.first { $0.id == agentID } }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            if let agent = agent {
+                Form {
+                    // ── Identitet ──────────────────────────────────────────
+                    Section {
+                        TextField("Namn", text: $name)
+                            .onChange(of: name) { save() }
+                    } header: { Text("Namn") }
+
+                    Section {
+                        ZStack(alignment: .topLeading) {
+                            if goal.isEmpty {
+                                Text("Beskriv agentens mål…")
+                                    .font(.system(size: 14)).foregroundColor(.secondary.opacity(0.5))
+                                    .padding(.top, 8).padding(.leading, 4)
+                            }
+                            TextEditor(text: $goal)
+                                .font(.system(size: 14))
+                                .frame(minHeight: 100)
+                                .scrollContentBackground(.hidden)
+                                .onChange(of: goal) { save() }
+                        }
+                    } header: { Text("Mål") }
+
+                    Section("Projekt") {
+                        Picker("Projekt", selection: $selectedProjectID) {
+                            Text("Inget projekt").tag(UUID?.none)
+                            ForEach(projectStore.projects) { p in
+                                Text(p.name).tag(UUID?.some(p.id))
+                            }
+                        }
+                        .onChange(of: selectedProjectID) { save() }
+                    }
+
+                    // ── Modell & Workers ───────────────────────────────────
+                    Section {
+                        Picker("Orkestrator-modell", selection: $model) {
+                            ForEach(ClaudeModel.allCases, id: \.self) { m in
+                                Text(m.displayName).tag(m)
+                            }
+                        }
+                        .onChange(of: model) { save() }
+
+                        Picker("Worker-modell", selection: $workerModel) {
+                            ForEach(ClaudeModel.allCases, id: \.self) { m in
+                                Text(m.displayName).tag(m)
+                            }
+                        }
+                        .onChange(of: workerModel) { save() }
+
+                        workerStepper
+                    } header: {
+                        Text("Modell & Workers")
+                    } footer: {
+                        Text("Workers utför parallella deluppgifter. Fler workers = snabbare men dyrare.")
+                    }
+
+                    // ── Kapacitet ──────────────────────────────────────────
+                    Section {
+                        Stepper(
+                            "Max tokens/iteration: \(maxTokensPerIteration)",
+                            value: $maxTokensPerIteration,
+                            in: 1000...100000, step: 1000
+                        )
+                        .onChange(of: maxTokensPerIteration) { save() }
+
+                        Stepper(
+                            maxIterations == 0 ? "Max iterationer: Obegränsat" : "Max iterationer: \(maxIterations)",
+                            value: $maxIterations, in: 0...10000, step: 10
+                        )
+                        .onChange(of: maxIterations) { save() }
+
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Paus mellan iterationer: \(String(format: "%.0f s", iterationDelaySeconds))")
+                                .font(.system(size: 14))
+                            Slider(value: $iterationDelaySeconds, in: 0...60, step: 1)
+                                .onChange(of: iterationDelaySeconds) { save() }
+                        }
+
+                        Stepper(
+                            "Kontext-historik: \(maxHistoryMessages) meddelanden",
+                            value: $maxHistoryMessages, in: 5...100, step: 5
+                        )
+                        .onChange(of: maxHistoryMessages) { save() }
+                    } header: { Text("Kapacitet") }
+
+                    // ── Beteende ───────────────────────────────────────────
+                    Section("Beteende") {
+                        Toggle("Starta om vid fel", isOn: $autoRestartOnFailure)
+                            .onChange(of: autoRestartOnFailure) { save() }
+                        Toggle("Pausa vid fråga till användare", isOn: $pauseOnUserQuestion)
+                            .onChange(of: pauseOnUserQuestion) { save() }
+                        Toggle("Detaljerad loggning", isOn: $verboseLogging)
+                            .onChange(of: verboseLogging) { save() }
+                        Toggle("Använd Navi-minnen som kontext", isOn: $memoryEnabled)
+                            .onChange(of: memoryEnabled) { save() }
+                    }
+
+                    // ── GitHub ─────────────────────────────────────────────
+                    Section {
+                        Toggle("Auto-commit till GitHub", isOn: $autoCommitToGitHub)
+                            .onChange(of: autoCommitToGitHub) { save() }
+                        if autoCommitToGitHub {
+                            TextField("Branch", text: $githubBranch)
+                                .onChange(of: githubBranch) { save() }
+                        }
+                    } header: { Text("GitHub") }
+
+                    // ── Extra systemprompt ─────────────────────────────────
+                    Section {
+                        ZStack(alignment: .topLeading) {
+                            if systemPromptAddition.isEmpty {
+                                Text("Extra instruktioner till agenten (valfritt)…")
+                                    .font(.system(size: 13)).foregroundColor(.secondary.opacity(0.5))
+                                    .padding(.top, 8).padding(.leading, 4)
+                            }
+                            TextEditor(text: $systemPromptAddition)
+                                .font(.system(size: 13))
+                                .frame(minHeight: 80)
+                                .scrollContentBackground(.hidden)
+                                .onChange(of: systemPromptAddition) { save() }
+                        }
+                    } header: { Text("Extra instruktioner") }
+
+                    // ── Notifikationer ─────────────────────────────────────
+                    Section("Notifikationer") {
+                        Toggle("Vid slutförande", isOn: $notifyOnCompletion)
+                            .onChange(of: notifyOnCompletion) { save() }
+                        Toggle("Vid fel", isOn: $notifyOnFailure)
+                            .onChange(of: notifyOnFailure) { save() }
+                        Toggle("Vid fråga", isOn: $notifyOnUserQuestion)
+                            .onChange(of: notifyOnUserQuestion) { save() }
+                    }
+
+                    // ── Farliga åtgärder ───────────────────────────────────
+                    Section {
+                        Button("Rensa logg", role: .destructive) {
+                            var updated = agent
+                            updated.runLog = []
+                            runner.update(updated)
+                        }
+                        Button("Nollställ kostnad & statistik", role: .destructive) {
+                            var updated = agent
+                            updated.totalTokensUsed = 0
+                            updated.totalCostSEK = 0
+                            updated.workerTokensUsed = 0
+                            updated.workerCostSEK = 0
+                            updated.sessionTokensUsed = 0
+                            updated.sessionCostSEK = 0
+                            updated.iterationCount = 0
+                            runner.update(updated)
+                        }
+                    } header: { Text("Åtgärder") }
+                }
+                .onAppear { loadFromAgent(agent) }
+                .onChange(of: agentID) { _ in if let a = self.agent { loadFromAgent(a) } }
+            }
+        }
+    }
+
+    // Worker stepper with visual indicator
+    @ViewBuilder
+    var workerStepper: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Tilldelade workers")
+                    .font(.system(size: 14))
+                Spacer()
+                HStack(spacing: 4) {
+                    Button {
+                        if assignedWorkers > 1 { assignedWorkers -= 1; save() }
+                    } label: {
+                        Image(systemName: "minus.circle.fill")
+                            .font(.system(size: 20)).foregroundColor(assignedWorkers > 1 ? .accentEon : .secondary.opacity(0.3))
+                    }
+                    .buttonStyle(.plain)
+
+                    Text("\(assignedWorkers)")
+                        .font(.system(size: 16, weight: .bold, design: .monospaced))
+                        .frame(width: 32, alignment: .center)
+
+                    Button {
+                        if assignedWorkers < 10 { assignedWorkers += 1; save() }
+                    } label: {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.system(size: 20)).foregroundColor(assignedWorkers < 10 ? .accentEon : .secondary.opacity(0.3))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            // Visual worker dots
+            HStack(spacing: 5) {
+                ForEach(1...10, id: \.self) { i in
+                    Circle()
+                        .fill(i <= assignedWorkers ? Color.accentEon : Color.primary.opacity(0.1))
+                        .frame(width: 14, height: 14)
+                        .overlay(
+                            Circle().stroke(Color.accentEon.opacity(i <= assignedWorkers ? 0 : 0.2), lineWidth: 1)
+                        )
+                        .animation(.easeInOut(duration: 0.15), value: assignedWorkers)
+                        .onTapGesture { assignedWorkers = i; save() }
+                }
+            }
+
+            Text(workerDescription)
+                .font(.system(size: 11)).foregroundColor(.secondary.opacity(0.7))
+        }
+    }
+
+    var workerDescription: String {
+        switch assignedWorkers {
+        case 1:     return "1 worker — sekventiell körning, lägst kostnad"
+        case 2...3: return "\(assignedWorkers) workers — bra balans mellan hastighet och kostnad"
+        case 4...6: return "\(assignedWorkers) workers — snabb parallell körning"
+        case 7...9: return "\(assignedWorkers) workers — hög parallellism, högre kostnad"
+        case 10:    return "10 workers — maximal parallellism"
+        default:    return ""
+        }
+    }
+
+    private func loadFromAgent(_ agent: AgentDefinition) {
+        name = agent.name
+        goal = agent.goal
+        model = agent.model
+        workerModel = agent.workerModel
+        assignedWorkers = agent.assignedWorkers
+        maxTokensPerIteration = agent.maxTokensPerIteration
+        maxIterations = agent.maxIterations
+        iterationDelaySeconds = agent.iterationDelaySeconds
+        autoRestartOnFailure = agent.autoRestartOnFailure
+        pauseOnUserQuestion = agent.pauseOnUserQuestion
+        verboseLogging = agent.verboseLogging
+        autoCommitToGitHub = agent.autoCommitToGitHub
+        githubBranch = agent.githubBranch
+        systemPromptAddition = agent.systemPromptAddition
+        maxHistoryMessages = agent.maxHistoryMessages
+        memoryEnabled = agent.memoryEnabled
+        notifyOnCompletion = agent.notifyOnCompletion
+        notifyOnFailure = agent.notifyOnFailure
+        notifyOnUserQuestion = agent.notifyOnUserQuestion
+        selectedProjectID = agent.projectID
+        loaded = true
+    }
+
+    private func save() {
+        guard loaded, var updated = agent else { return }
+        updated.name = name.trimmingCharacters(in: .whitespaces).isEmpty ? updated.name : name
+        updated.goal = goal
+        updated.model = model
+        updated.workerModel = workerModel
+        updated.assignedWorkers = assignedWorkers
+        updated.maxTokensPerIteration = maxTokensPerIteration
+        updated.maxIterations = maxIterations
+        updated.iterationDelaySeconds = iterationDelaySeconds
+        updated.autoRestartOnFailure = autoRestartOnFailure
+        updated.pauseOnUserQuestion = pauseOnUserQuestion
+        updated.verboseLogging = verboseLogging
+        updated.autoCommitToGitHub = autoCommitToGitHub
+        updated.githubBranch = githubBranch
+        updated.systemPromptAddition = systemPromptAddition
+        updated.maxHistoryMessages = maxHistoryMessages
+        updated.memoryEnabled = memoryEnabled
+        updated.notifyOnCompletion = notifyOnCompletion
+        updated.notifyOnFailure = notifyOnFailure
+        updated.notifyOnUserQuestion = notifyOnUserQuestion
+        updated.projectID = selectedProjectID
+        updated.projectName = projectStore.projects.first { $0.id == selectedProjectID }?.name
+        runner.update(updated)
     }
 }
 
@@ -535,6 +853,7 @@ struct AgentLogEntryRow: View {
         case .milestone:        return "flag.fill"
         case .userMessage:      return "person.fill"
         case .assistantMessage: return "cpu.fill"
+        case .workerResult:     return "person.2.fill"
         }
     }
 
@@ -548,12 +867,12 @@ struct AgentLogEntryRow: View {
         case .milestone:        return .orange
         case .userMessage:      return .secondary
         case .assistantMessage: return .primary
+        case .workerResult:     return .purple
         }
     }
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
-            // Icon
             ZStack {
                 Circle().fill(color.opacity(0.1)).frame(width: 22, height: 22)
                 Image(systemName: icon).font(.system(size: 10)).foregroundColor(color)
@@ -561,34 +880,38 @@ struct AgentLogEntryRow: View {
             .padding(.top, 1)
 
             VStack(alignment: .leading, spacing: 3) {
-                if entry.type == .assistantMessage {
-                    // Show assistant messages as markdown-like text
+                if entry.type == .assistantMessage || entry.type == .workerResult {
                     Text(String(entry.content.prefix(800)))
-                        .font(.system(size: 12))
-                        .foregroundColor(.primary)
-                        .lineSpacing(3)
-                        .textSelection(.enabled)
+                        .font(.system(size: 12)).foregroundColor(.primary).lineSpacing(3).textSelection(.enabled)
                 } else if entry.type == .tool {
                     Text(entry.content)
-                        .font(.system(size: 11, design: .monospaced))
-                        .foregroundColor(.purple)
-                        .padding(6)
-                        .background(Color.purple.opacity(0.06), in: RoundedRectangle(cornerRadius: 6))
+                        .font(.system(size: 11, design: .monospaced)).foregroundColor(.purple)
+                        .padding(6).background(Color.purple.opacity(0.06), in: RoundedRectangle(cornerRadius: 6))
                 } else {
                     Text(entry.content)
                         .font(.system(size: 12))
                         .foregroundColor(entry.isError ? .red : .primary.opacity(0.85))
-                        .lineSpacing(2)
-                        .textSelection(.enabled)
+                        .lineSpacing(2).textSelection(.enabled)
                 }
 
-                Text(entry.timestamp, style: .time)
-                    .font(.system(size: 10))
-                    .foregroundColor(.secondary.opacity(0.5))
+                HStack(spacing: 8) {
+                    Text(entry.timestamp, style: .time)
+                        .font(.system(size: 10)).foregroundColor(.secondary.opacity(0.5))
+                    if let cost = entry.costSEK, cost > 0 {
+                        Text(String(format: "%.4f kr", cost))
+                            .font(.system(size: 9, design: .monospaced))
+                            .foregroundColor(.green.opacity(0.7))
+                            .padding(.horizontal, 4).padding(.vertical, 1)
+                            .background(Color.green.opacity(0.08), in: RoundedRectangle(cornerRadius: 3))
+                    }
+                    if let tok = entry.tokensUsed, tok > 0 {
+                        Text("\(tok) tok")
+                            .font(.system(size: 9, design: .monospaced)).foregroundColor(.secondary.opacity(0.4))
+                    }
+                }
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 6)
+        .padding(.horizontal, 16).padding(.vertical, 6)
     }
 }
 
@@ -606,21 +929,14 @@ struct AgentStreamingRow: View {
                 Image(systemName: "cpu.fill").font(.system(size: 10)).foregroundColor(.green)
             }
             .padding(.top, 1)
-
             HStack(alignment: .lastTextBaseline, spacing: 0) {
                 Text(buffer.displayText)
-                    .font(.system(size: 12))
-                    .foregroundColor(.primary.opacity(0.85))
-                    .lineSpacing(3)
-                RoundedRectangle(cornerRadius: 1)
-                    .fill(Color.green.opacity(0.7))
-                    .frame(width: 2, height: 12)
-                    .opacity(cursorVisible ? 1 : 0)
-                    .padding(.leading, 2)
+                    .font(.system(size: 12)).foregroundColor(.primary.opacity(0.85)).lineSpacing(3)
+                RoundedRectangle(cornerRadius: 1).fill(Color.green.opacity(0.7))
+                    .frame(width: 2, height: 12).opacity(cursorVisible ? 1 : 0).padding(.leading, 2)
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 6)
+        .padding(.horizontal, 16).padding(.vertical, 6)
         .onChange(of: text) { buffer.update($0) }
         .onAppear {
             buffer.update(text)
@@ -639,69 +955,90 @@ struct CreateAgentSheet: View {
     @State private var name = ""
     @State private var goal = ""
     @State private var selectedProjectID: UUID? = nil
-    @State private var selectedModel: ClaudeModel = .sonnet45
+    @State private var model: ClaudeModel = .sonnet45
+    @State private var workerModel: ClaudeModel = .haiku
+    @State private var assignedWorkers = 2
     @State private var maxIterations = 0
+    @State private var maxTokensPerIteration = 8000
+    @State private var iterationDelaySeconds = 1.0
     @State private var autoRestart = false
+    @State private var pauseOnUserQuestion = true
     @State private var startImmediately = true
+    @State private var verboseLogging = false
+    @State private var memoryEnabled = true
 
-    var selectedProjectName: String? {
-        projects.first { $0.id == selectedProjectID }?.name
+    var canCreate: Bool {
+        !name.trimmingCharacters(in: .whitespaces).isEmpty &&
+        !goal.trimmingCharacters(in: .whitespaces).isEmpty
     }
-
-    var canCreate: Bool { !name.trimmingCharacters(in: .whitespaces).isEmpty && !goal.trimmingCharacters(in: .whitespaces).isEmpty }
 
     var body: some View {
         NavigationView {
             Form {
                 Section {
                     TextField("Agentens namn", text: $name)
-                } header: {
-                    Text("Namn")
-                }
+                } header: { Text("Namn") }
 
                 Section {
                     ZStack(alignment: .topLeading) {
                         if goal.isEmpty {
                             Text("Beskriv vad agenten skall uppnå. Kan vara ett långt, detaljerat mål som tar timmar eller dagar att genomföra...")
-                                .font(.system(size: 14))
-                                .foregroundColor(.secondary.opacity(0.6))
-                                .padding(.top, 8)
-                                .padding(.leading, 4)
+                                .font(.system(size: 14)).foregroundColor(.secondary.opacity(0.6))
+                                .padding(.top, 8).padding(.leading, 4)
                         }
                         TextEditor(text: $goal)
-                            .font(.system(size: 14))
-                            .frame(minHeight: 160)
-                            .scrollContentBackground(.hidden)
+                            .font(.system(size: 14)).frame(minHeight: 160).scrollContentBackground(.hidden)
                     }
-                } header: {
-                    Text("Mål")
-                } footer: {
-                    Text("Agenten arbetar autonomt tills målet är uppnått. Ge ett tydligt, detaljerat mål.")
-                }
+                } header: { Text("Mål") }
+                  footer: { Text("Agenten arbetar autonomt tills målet är uppnått.") }
 
                 Section("Projekt (valfritt)") {
                     Picker("Projekt", selection: $selectedProjectID) {
                         Text("Inget projekt").tag(UUID?.none)
-                        ForEach(projects) { project in
-                            Text(project.name).tag(UUID?.some(project.id))
-                        }
+                        ForEach(projects) { p in Text(p.name).tag(UUID?.some(p.id)) }
                     }
                 }
 
-                Section("Modell") {
-                    Picker("Modell", selection: $selectedModel) {
-                        ForEach(ClaudeModel.allCases, id: \.self) { model in
-                            Text(model.displayName).tag(model)
+                Section {
+                    Picker("Orkestrator-modell", selection: $model) {
+                        ForEach(ClaudeModel.allCases, id: \.self) { m in Text(m.displayName).tag(m) }
+                    }
+                    Picker("Worker-modell", selection: $workerModel) {
+                        ForEach(ClaudeModel.allCases, id: \.self) { m in Text(m.displayName).tag(m) }
+                    }
+                    // Worker count
+                    HStack {
+                        Text("Tilldelade workers")
+                        Spacer()
+                        HStack(spacing: 6) {
+                            Button { if assignedWorkers > 1 { assignedWorkers -= 1 } } label: {
+                                Image(systemName: "minus.circle.fill").font(.system(size: 20))
+                                    .foregroundColor(assignedWorkers > 1 ? .accentEon : .secondary.opacity(0.3))
+                            }
+                            .buttonStyle(.plain)
+                            Text("\(assignedWorkers)").font(.system(size: 16, weight: .bold, design: .monospaced)).frame(width: 28)
+                            Button { if assignedWorkers < 10 { assignedWorkers += 1 } } label: {
+                                Image(systemName: "plus.circle.fill").font(.system(size: 20))
+                                    .foregroundColor(assignedWorkers < 10 ? .accentEon : .secondary.opacity(0.3))
+                            }
+                            .buttonStyle(.plain)
                         }
                     }
-                }
+                } header: { Text("Modell & Workers") }
 
-                Section("Avancerat") {
+                Section("Kapacitet") {
                     Stepper(
-                        maxIterations == 0 ? "Max iterationer: Obegränsat" : "Max iterationer: \(maxIterations)",
-                        value: $maxIterations, in: 0...1000, step: 10
+                        maxIterations == 0 ? "Max iterationer: Obegränsat" : "Max: \(maxIterations)",
+                        value: $maxIterations, in: 0...10000, step: 10
                     )
+                    Stepper("Max tokens/iter: \(maxTokensPerIteration)", value: $maxTokensPerIteration, in: 1000...100000, step: 1000)
+                }
+
+                Section("Beteende") {
                     Toggle("Starta om vid fel", isOn: $autoRestart)
+                    Toggle("Pausa vid fråga", isOn: $pauseOnUserQuestion)
+                    Toggle("Detaljerad loggning", isOn: $verboseLogging)
+                    Toggle("Använd Navi-minnen", isOn: $memoryEnabled)
                     Toggle("Starta direkt", isOn: $startImmediately)
                 }
             }
@@ -710,100 +1047,56 @@ struct CreateAgentSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             #endif
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Avbryt") { dismiss() }
-                }
+                ToolbarItem(placement: .cancellationAction) { Button("Avbryt") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Skapa") {
                         let agent = runner.create(
                             name: name.trimmingCharacters(in: .whitespaces),
                             goal: goal.trimmingCharacters(in: .whitespaces),
                             projectID: selectedProjectID,
-                            projectName: selectedProjectName,
-                            model: selectedModel,
-                            maxIterations: maxIterations
+                            projectName: projects.first { $0.id == selectedProjectID }?.name,
+                            model: model,
+                            workerModel: workerModel,
+                            assignedWorkers: assignedWorkers,
+                            maxTokensPerIteration: maxTokensPerIteration,
+                            maxIterations: maxIterations,
+                            autoRestartOnFailure: autoRestart,
+                            pauseOnUserQuestion: pauseOnUserQuestion,
+                            verboseLogging: verboseLogging,
+                            memoryEnabled: memoryEnabled
                         )
                         if startImmediately { runner.start(agent.id) }
                         dismiss()
                     }
-                    .disabled(!canCreate)
-                    .fontWeight(.semibold)
+                    .disabled(!canCreate).fontWeight(.semibold)
                 }
             }
         }
     }
 }
 
-// MARK: - Edit Agent Sheet
+// MARK: - Edit Agent Sheet (opens settings inline)
 
 struct EditAgentSheet: View {
     let agent: AgentDefinition
     @Environment(\.dismiss) private var dismiss
-    @StateObject private var runner = AutonomousAgentRunner.shared
-
-    @State private var name: String
-    @State private var goal: String
-    @State private var maxIterations: Int
-    @State private var autoRestart: Bool
-
-    init(agent: AgentDefinition) {
-        self.agent = agent
-        _name = State(initialValue: agent.name)
-        _goal = State(initialValue: agent.goal)
-        _maxIterations = State(initialValue: agent.maxIterations)
-        _autoRestart = State(initialValue: agent.autoRestartOnFailure)
-    }
 
     var body: some View {
         NavigationView {
-            Form {
-                Section("Namn") {
-                    TextField("Namn", text: $name)
-                }
-                Section("Mål") {
-                    TextEditor(text: $goal)
-                        .frame(minHeight: 120)
-                        .scrollContentBackground(.hidden)
-                }
-                Section("Avancerat") {
-                    Stepper(
-                        maxIterations == 0 ? "Max: Obegränsat" : "Max: \(maxIterations)",
-                        value: $maxIterations, in: 0...1000, step: 10
-                    )
-                    Toggle("Starta om vid fel", isOn: $autoRestart)
-                }
-                Section {
-                    Button("Rensa logg", role: .destructive) {
-                        var updated = agent
-                        updated.runLog = []
-                        runner.update(updated)
+            AgentSettingsEditor(agentID: agent.id)
+                .navigationTitle("Inställningar")
+                #if os(iOS)
+                .navigationBarTitleDisplayMode(.inline)
+                #endif
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Klar") { dismiss() }.fontWeight(.semibold)
                     }
                 }
-            }
-            .navigationTitle("Redigera agent")
-            #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
-            #endif
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Avbryt") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Spara") {
-                        var updated = agent
-                        updated.name = name.trimmingCharacters(in: .whitespaces)
-                        updated.goal = goal.trimmingCharacters(in: .whitespaces)
-                        updated.maxIterations = maxIterations
-                        updated.autoRestartOnFailure = autoRestart
-                        runner.update(updated)
-                        dismiss()
-                    }
-                    .fontWeight(.semibold)
-                }
-            }
         }
     }
 }
 
 #Preview("AgentView") {
-    AgentView()
-        .frame(width: 900, height: 600)
+    AgentView().frame(width: 900, height: 600)
 }

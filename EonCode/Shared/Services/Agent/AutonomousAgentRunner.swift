@@ -27,11 +27,48 @@ final class AutonomousAgentRunner: ObservableObject {
 
     // MARK: - CRUD
 
-    func create(name: String, goal: String, projectID: UUID?, projectName: String?, model: ClaudeModel, maxIterations: Int) -> AgentDefinition {
+    func create(
+        name: String,
+        goal: String,
+        projectID: UUID?,
+        projectName: String?,
+        model: ClaudeModel,
+        workerModel: ClaudeModel = .haiku,
+        assignedWorkers: Int = 2,
+        maxTokensPerIteration: Int = 8000,
+        maxIterations: Int = 0,
+        iterationDelaySeconds: Double = 1.0,
+        autoRestartOnFailure: Bool = false,
+        pauseOnUserQuestion: Bool = true,
+        verboseLogging: Bool = false,
+        autoCommitToGitHub: Bool = false,
+        githubBranch: String = "main",
+        systemPromptAddition: String = "",
+        maxHistoryMessages: Int = 30,
+        memoryEnabled: Bool = true,
+        notifyOnCompletion: Bool = true,
+        notifyOnFailure: Bool = true,
+        notifyOnUserQuestion: Bool = true
+    ) -> AgentDefinition {
         let def = AgentDefinition(
             name: name, goal: goal,
             projectID: projectID, projectName: projectName,
-            model: model, maxIterations: maxIterations
+            model: model, workerModel: workerModel,
+            assignedWorkers: assignedWorkers,
+            maxTokensPerIteration: maxTokensPerIteration,
+            maxIterations: maxIterations,
+            iterationDelaySeconds: iterationDelaySeconds,
+            autoRestartOnFailure: autoRestartOnFailure,
+            pauseOnUserQuestion: pauseOnUserQuestion,
+            verboseLogging: verboseLogging,
+            autoCommitToGitHub: autoCommitToGitHub,
+            githubBranch: githubBranch,
+            systemPromptAddition: systemPromptAddition,
+            maxHistoryMessages: maxHistoryMessages,
+            memoryEnabled: memoryEnabled,
+            notifyOnCompletion: notifyOnCompletion,
+            notifyOnFailure: notifyOnFailure,
+            notifyOnUserQuestion: notifyOnUserQuestion
         )
         agents.append(def)
         store.save(agents)
@@ -115,8 +152,19 @@ final class AutonomousAgentRunner: ObservableObject {
             let goalAchieved = await runIteration(agentID: agentID)
             if goalAchieved { break }
 
-            // Small pause between iterations to avoid hammering the API
-            try? await Task.sleep(for: .seconds(1))
+            // Configurable pause between iterations
+            let delay = agents.first(where: { $0.id == agentID })?.iterationDelaySeconds ?? 1.0
+            if delay > 0 {
+                try? await Task.sleep(for: .seconds(delay))
+            }
+        }
+    }
+
+    // Resets session cost counters when agent starts fresh
+    func resetSessionCost(_ id: UUID) {
+        if let idx = agents.firstIndex(where: { $0.id == id }) {
+            agents[idx].sessionTokensUsed = 0
+            agents[idx].sessionCostSEK = 0
         }
     }
 
@@ -128,7 +176,7 @@ final class AutonomousAgentRunner: ObservableObject {
         agents[idx].iterationCount += 1
         let iterNum = agents[idx].iterationCount
 
-        // Build messages for this iteration
+        // Build messages for this iteration (bounded by maxHistoryMessages)
         var messages: [ChatMessage] = buildMessages(for: agent)
 
         // Append current iteration prompt
@@ -152,28 +200,30 @@ final class AutonomousAgentRunner: ObservableObject {
                 messages: messages,
                 model: agent.model,
                 systemPrompt: systemPrompt,
-                maxTokens: 8000
+                maxTokens: agent.maxTokensPerIteration
             )
             fullResponse = response
 
-            // Update cost
+            // Cost calculation
             let costUSD = Double(usage.inputTokens) * agent.model.inputPricePerMTok / 1_000_000
                         + Double(usage.outputTokens) * agent.model.outputPricePerMTok / 1_000_000
             let costSEK = costUSD * 10.5
+            let tokens = usage.inputTokens + usage.outputTokens
 
             if let i = agents.firstIndex(where: { $0.id == agentID }) {
-                agents[i].totalTokensUsed += usage.inputTokens + usage.outputTokens
+                agents[i].totalTokensUsed += tokens
                 agents[i].totalCostSEK += costSEK
+                agents[i].sessionTokensUsed += tokens
+                agents[i].sessionCostSEK += costSEK
                 agents[i].currentTaskDescription = extractCurrentTask(from: fullResponse)
                 agents[i].lastActiveAt = Date()
 
-                // Store in conversation history
+                // Store in conversation history (bounded by maxHistoryMessages)
                 agents[i].conversationHistory.append(StoredMessage(role: "user", content: iterPrompt))
                 agents[i].conversationHistory.append(StoredMessage(role: "assistant", content: fullResponse))
-
-                // Keep history bounded (last 60 messages = 30 back-and-forth)
-                if agents[i].conversationHistory.count > 60 {
-                    agents[i].conversationHistory = Array(agents[i].conversationHistory.suffix(60))
+                let maxHist = agents[i].maxHistoryMessages * 2  // pairs
+                if agents[i].conversationHistory.count > maxHist {
+                    agents[i].conversationHistory = Array(agents[i].conversationHistory.suffix(maxHist))
                 }
             }
 
@@ -183,15 +233,17 @@ final class AutonomousAgentRunner: ObservableObject {
             // Execute any tool calls embedded in the response
             await executeToolCalls(from: fullResponse, agentID: agentID)
 
-            // Log
-            appendLog(agentID: agentID, type: .assistantMessage, content: fullResponse)
+            // Log with cost info
+            appendLog(agentID: agentID, type: .assistantMessage, content: fullResponse,
+                      costSEK: costSEK, tokensUsed: tokens)
 
             if goalAchieved {
                 if let i = agents.firstIndex(where: { $0.id == agentID }) {
                     agents[i].status = .completed
                     agents[i].currentTaskDescription = "Mål uppnått!"
                 }
-                appendLog(agentID: agentID, type: .milestone, content: "✅ Mål uppnått efter \(iterNum) iterationer")
+                appendLog(agentID: agentID, type: .milestone,
+                          content: "✅ Mål uppnått efter \(iterNum) iterationer · Totalt: \(String(format: "%.4f kr", agents.first(where: { $0.id == agentID })?.grandTotalCostSEK ?? 0))")
             }
 
         } catch {
@@ -201,7 +253,7 @@ final class AutonomousAgentRunner: ObservableObject {
                 if !shouldRestart {
                     agents[i].status = .failed
                     agents[i].currentTaskDescription = "Fel: \(error.localizedDescription)"
-                    goalAchieved = true // stop loop
+                    goalAchieved = true
                 }
             }
         }
@@ -214,8 +266,8 @@ final class AutonomousAgentRunner: ObservableObject {
     // MARK: - Message building
 
     private func buildMessages(for agent: AgentDefinition) -> [ChatMessage] {
-        // Use stored conversation history for full context
-        return agent.conversationHistory.map { stored in
+        let bounded = Array(agent.conversationHistory.suffix(agent.maxHistoryMessages * 2))
+        return bounded.map { stored in
             let role: MessageRole = stored.role == "user" ? .user : .assistant
             return ChatMessage(role: role, content: [.text(stored.content)])
         }
@@ -313,11 +365,13 @@ final class AutonomousAgentRunner: ObservableObject {
 
     // MARK: - Logging
 
-    private func appendLog(agentID: UUID, type: AgentRunEntry.EntryType, content: String, isError: Bool = false) {
+    private func appendLog(agentID: UUID, type: AgentRunEntry.EntryType, content: String,
+                           isError: Bool = false, costSEK: Double? = nil, tokensUsed: Int? = nil) {
         guard let idx = agents.firstIndex(where: { $0.id == agentID }) else { return }
-        let entry = AgentRunEntry(type: type, content: content, isError: isError)
+        var entry = AgentRunEntry(type: type, content: content, isError: isError)
+        entry.costSEK = costSEK
+        entry.tokensUsed = tokensUsed
         agents[idx].runLog.append(entry)
-        // Keep log bounded
         if agents[idx].runLog.count > 500 {
             agents[idx].runLog = Array(agents[idx].runLog.suffix(500))
         }
