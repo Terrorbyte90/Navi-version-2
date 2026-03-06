@@ -112,6 +112,42 @@ struct GitHubCommit: Identifiable, Codable {
     }
 }
 
+struct GitHubPullRequest: Identifiable, Codable {
+    let id: Int
+    let number: Int
+    let title: String
+    let body: String?
+    let state: String          // "open", "closed"
+    let htmlURL: String
+    let createdAt: String
+    let updatedAt: String
+    let user: PRUser
+    let head: PRRef
+    let base: PRRef
+    let merged: Bool?
+    let draft: Bool?
+
+    struct PRUser: Codable {
+        let login: String
+        let avatarURL: String?
+        enum CodingKeys: String, CodingKey {
+            case login
+            case avatarURL = "avatar_url"
+        }
+    }
+    struct PRRef: Codable {
+        let ref: String
+        let label: String?
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, number, title, body, state, user, head, base, merged, draft
+        case htmlURL = "html_url"
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+    }
+}
+
 enum GitHubAuthState {
     case notAuthorized
     case authorized(user: GitHubUser)
@@ -133,6 +169,7 @@ final class GitHubManager: ObservableObject {
     @Published var commitCache: [String: [GitHubCommit]] = [:]  // "fullName/branch" → commits
     @Published var clonedRepos: [String: String] = [:]          // fullName → localPath
     @Published var syncStatus: [String: String] = [:]           // fullName → status message
+    @Published var prCache: [String: [GitHubPullRequest]] = [:] // fullName → PRs
 
     private let baseURL = "https://api.github.com"
     private var cancellables = Set<AnyCancellable>()
@@ -274,6 +311,65 @@ final class GitHubManager: ObservableObject {
             commitCache[cacheKey] = commits
             return commits
         } catch { return [] }
+    }
+
+    // MARK: - Pull Requests
+
+    func fetchPullRequests(for repo: GitHubRepo, state: String = "open", forceRefresh: Bool = false) async -> [GitHubPullRequest] {
+        if !forceRefresh, let cached = prCache[repo.fullName] { return cached }
+        guard let token else { return [] }
+        do {
+            let req = try makeRequest(path: "/repos/\(repo.fullName)/pulls?state=\(state)&per_page=30&sort=updated&direction=desc", token: token)
+            let (data, resp) = try await URLSession.shared.data(for: req)
+            try checkResponse(resp, data: data)
+            let prs = try JSONDecoder().decode([GitHubPullRequest].self, from: data)
+            prCache[repo.fullName] = prs
+            return prs
+        } catch { return [] }
+    }
+
+    func createPullRequest(
+        repo: GitHubRepo,
+        title: String,
+        body: String,
+        head: String,
+        base: String
+    ) async throws -> GitHubPullRequest {
+        guard let token else { throw GitHubError.unauthorized }
+
+        var req = try makeRequest(path: "/repos/\(repo.fullName)/pulls", token: token)
+        req.httpMethod = "POST"
+        let payload: [String: Any] = [
+            "title": title,
+            "body": body,
+            "head": head,
+            "base": base
+        ]
+        req.httpBody = try JSONSerialization.data(withJSONObject: payload)
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let (data, resp) = try await URLSession.shared.data(for: req)
+        try checkResponse(resp, data: data)
+        let pr = try JSONDecoder().decode(GitHubPullRequest.self, from: data)
+        // Invalidate cache
+        prCache[repo.fullName] = nil
+        return pr
+    }
+
+    func mergePullRequest(repo: GitHubRepo, number: Int) async throws {
+        guard let token else { throw GitHubError.unauthorized }
+
+        var req = try makeRequest(path: "/repos/\(repo.fullName)/pulls/\(number)/merge", token: token)
+        req.httpMethod = "PUT"
+        let payload: [String: Any] = ["merge_method": "squash"]
+        req.httpBody = try JSONSerialization.data(withJSONObject: payload)
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let (data, resp) = try await URLSession.shared.data(for: req)
+        try checkResponse(resp, data: data)
+        // Invalidate caches
+        prCache[repo.fullName] = nil
+        commitCache = commitCache.filter { !$0.key.hasPrefix(repo.fullName) }
     }
 
     // MARK: - Clone / open repo locally

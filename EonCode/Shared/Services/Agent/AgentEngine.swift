@@ -81,10 +81,6 @@ final class AgentEngine: ObservableObject {
         defer {
             isRunning = false
             currentTask = nil
-            // Auto-push to GitHub after every agent run
-            if let project = currentProject {
-                Task { await self.autoGitHubSync(project: project, onUpdate: onUpdate) }
-            }
         }
 
         var task = task
@@ -319,37 +315,6 @@ final class AgentEngine: ObservableObject {
         return dict.mapValues { AnyCodable($0) }
     }
 
-    // MARK: - Auto GitHub sync
-
-    private func autoGitHubSync(project: EonProject, onUpdate: @escaping (String) -> Void) async {
-        let gh = GitHubManager.shared
-
-        // If project already has a linked repo, push changes
-        if let fullName = project.githubRepoFullName,
-           let repo = gh.repos.first(where: { $0.fullName == fullName }) {
-            onUpdate("📤 Pushar ändringar till GitHub…")
-            await gh.autoCommitAndPush(repo: repo, changedFiles: [])
-            onUpdate("✅ GitHub synkad: \(fullName)")
-            return
-        }
-
-        // If GitHub token exists but no repo linked, auto-create repo
-        guard gh.token != nil else { return }
-
-        // Only auto-create if setting is enabled
-        guard SettingsStore.shared.autoGitHubSync else { return }
-
-        onUpdate("🔗 Skapar GitHub-repo för projektet…")
-        if let newRepo = await gh.ensureRepoExists(for: project) {
-            // Link project to new repo
-            var updated = project
-            updated.githubRepoFullName = newRepo.fullName
-            updated.githubBranch = newRepo.defaultBranch
-            await ProjectStore.shared.save(updated)
-            onUpdate("✅ GitHub-repo skapat: \(newRepo.fullName)")
-        }
-    }
-
     // MARK: - Simple chat (non-agent)
 
     func sendChat(
@@ -389,7 +354,6 @@ final class AgentEngine: ObservableObject {
                         case .messageDelta(_, let usage):
                             if let u = usage {
                                 finalUsage = u
-                                outputTokens = u.outputTokens
                             }
                         case .messageStart(_, _):
                             break
@@ -437,6 +401,3 @@ func agentActionFromTool(name: String, params: [String: String]) -> AgentAction 
     default:                return .custom(name: name, params: params)
     }
 }
-
-// Needed for capturing in closure
-private var outputTokens = 0

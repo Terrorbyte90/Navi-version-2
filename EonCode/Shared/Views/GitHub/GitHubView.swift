@@ -351,6 +351,9 @@ struct RepoWorkView: View {
     @State private var workStarted = false        // after "Börja arbeta" tapped
     @State private var showCommitSheet = false
     @State private var commitMessage = ""
+    @State private var pullRequests: [GitHubPullRequest] = []
+    @State private var isLoadingPRs = false
+    @State private var showCreatePR = false
 
     var currentRepo: GitHubRepo {
         gh.repos.first(where: { $0.id == repo.id }) ?? repo
@@ -387,6 +390,11 @@ struct RepoWorkView: View {
                 Task {
                     commits = await gh.fetchCommits(for: currentRepo, forceRefresh: true)
                 }
+            }
+        }
+        .sheet(isPresented: $showCreatePR) {
+            CreatePRSheet(repo: currentRepo, branches: branches) {
+                Task { pullRequests = await gh.fetchPullRequests(for: currentRepo, forceRefresh: true) }
             }
         }
     }
@@ -541,8 +549,9 @@ struct RepoWorkView: View {
     var tabBar: some View {
         HStack(spacing: 0) {
             tabPill("Commits", idx: 0)
-            tabPill("Filer", idx: 1)
-            tabPill("Info", idx: 2)
+            tabPill("PRs", idx: 1)
+            tabPill("Filer", idx: 2)
+            tabPill("Info", idx: 3)
 
             Spacer()
 
@@ -629,7 +638,8 @@ struct RepoWorkView: View {
     var tabContent: some View {
         switch selectedTab {
         case 0: commitsTab
-        case 1: filesTab
+        case 1: pullRequestsTab
+        case 2: filesTab
         default: infoTab
         }
     }
@@ -653,6 +663,60 @@ struct RepoWorkView: View {
                 }
             }
             .padding(.bottom, 16)
+        }
+    }
+
+    // MARK: - Pull Requests tab
+
+    var pullRequestsTab: some View {
+        VStack(spacing: 0) {
+            // Create PR button
+            HStack {
+                Spacer()
+                Button { showCreatePR = true } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "plus.circle.fill").font(.system(size: 12))
+                        Text("Ny PR").font(.system(size: 12, weight: .semibold))
+                    }
+                    .foregroundColor(.accentEon)
+                    .padding(.horizontal, 12).padding(.vertical, 6)
+                    .background(Color.accentEon.opacity(0.12))
+                    .cornerRadius(8)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 16).padding(.vertical, 8)
+
+            Divider().opacity(0.08)
+
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 1) {
+                    if isLoadingPRs {
+                        ProgressView().frame(maxWidth: .infinity).padding(.top, 24)
+                    } else if pullRequests.isEmpty {
+                        VStack(spacing: 8) {
+                            Image(systemName: "arrow.triangle.pull")
+                                .font(.system(size: 24)).foregroundColor(.secondary.opacity(0.2))
+                            Text("Inga öppna PRs").font(.system(size: 13)).foregroundColor(.secondary.opacity(0.4))
+                        }
+                        .frame(maxWidth: .infinity).padding(.top, 32)
+                    } else {
+                        ForEach(pullRequests) { pr in
+                            PRRow(pr: pr, repo: currentRepo) {
+                                Task { pullRequests = await gh.fetchPullRequests(for: currentRepo, forceRefresh: true) }
+                            }
+                        }
+                    }
+                }
+                .padding(.bottom, 16)
+            }
+        }
+        .onAppear {
+            Task {
+                isLoadingPRs = true
+                pullRequests = await gh.fetchPullRequests(for: currentRepo, forceRefresh: true)
+                isLoadingPRs = false
+            }
         }
     }
 
@@ -714,7 +778,10 @@ struct RepoWorkView: View {
             branches = await gh.fetchBranches(for: repo, forceRefresh: true)
             isLoadingBranches = false
             isLoadingCommits = true
-            commits = await gh.fetchCommits(for: currentRepo, forceRefresh: true)
+            async let commitsTask = gh.fetchCommits(for: currentRepo, forceRefresh: true)
+            async let prsTask = gh.fetchPullRequests(for: currentRepo, forceRefresh: true)
+            commits = await commitsTask
+            pullRequests = await prsTask
             isLoadingCommits = false
         }
     }
@@ -1045,6 +1112,235 @@ struct CommitAndPushSheet: View {
                 dismiss()
             }
         }
+    }
+}
+
+// MARK: - PR Row
+
+struct PRRow: View {
+    let pr: GitHubPullRequest
+    let repo: GitHubRepo
+    let onMerged: () -> Void
+    @StateObject private var gh = GitHubManager.shared
+    @State private var isMerging = false
+    @State private var mergeError = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Image(systemName: pr.draft == true ? "circle.dashed" : "arrow.triangle.pull")
+                    .font(.system(size: 13))
+                    .foregroundColor(pr.state == "open" ? .green : .purple)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(pr.title)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(.primary)
+                        .lineLimit(2)
+                    HStack(spacing: 6) {
+                        Text("#\(pr.number)")
+                            .font(.system(size: 11, design: .monospaced))
+                            .foregroundColor(.accentEon)
+                        Text(pr.user.login)
+                            .font(.system(size: 10))
+                            .foregroundColor(.secondary.opacity(0.6))
+                        Text("·").foregroundColor(.secondary.opacity(0.3))
+                        Text("\(pr.head.ref) → \(pr.base.ref)")
+                            .font(.system(size: 10))
+                            .foregroundColor(.secondary.opacity(0.5))
+                    }
+                }
+
+                Spacer()
+
+                if pr.state == "open" && pr.draft != true {
+                    Button {
+                        Task { await merge() }
+                    } label: {
+                        if isMerging {
+                            ProgressView().scaleEffect(0.6)
+                        } else {
+                            Text("Merge")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 10).padding(.vertical, 4)
+                                .background(Color.green.opacity(0.8))
+                                .cornerRadius(6)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(isMerging)
+                }
+            }
+
+            if !mergeError.isEmpty {
+                Text(mergeError)
+                    .font(.system(size: 11))
+                    .foregroundColor(.red)
+            }
+        }
+        .padding(.horizontal, 16).padding(.vertical, 10)
+    }
+
+    private func merge() async {
+        isMerging = true
+        mergeError = ""
+        do {
+            try await gh.mergePullRequest(repo: repo, number: pr.number)
+            onMerged()
+        } catch {
+            mergeError = error.localizedDescription
+        }
+        isMerging = false
+    }
+}
+
+// MARK: - Create PR Sheet
+
+struct CreatePRSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @StateObject private var gh = GitHubManager.shared
+    let repo: GitHubRepo
+    let branches: [GitHubBranch]
+    var onCreated: (() -> Void)?
+
+    @State private var title = ""
+    @State private var body = ""
+    @State private var headBranch: String
+    @State private var baseBranch: String
+    @State private var isCreating = false
+    @State private var error = ""
+
+    init(repo: GitHubRepo, branches: [GitHubBranch], onCreated: (() -> Void)? = nil) {
+        self.repo = repo
+        self.branches = branches
+        self.onCreated = onCreated
+        _headBranch = State(initialValue: repo.currentBranch)
+        _baseBranch = State(initialValue: repo.defaultBranch)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 8) {
+                Image(systemName: "arrow.triangle.pull").foregroundColor(.accentEon)
+                Text("Skapa Pull Request").font(.system(size: 18, weight: .bold))
+            }
+
+            // Title
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Titel").font(.system(size: 12, weight: .semibold)).foregroundColor(.secondary)
+                TextField("PR-titel…", text: $title)
+                    .font(.system(size: 13))
+                    .textFieldStyle(.plain)
+                    .padding(10)
+                    .background(Color.inputBackground)
+                    .cornerRadius(8)
+                    .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.inputBorder, lineWidth: 0.5))
+            }
+
+            // Description
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Beskrivning").font(.system(size: 12, weight: .semibold)).foregroundColor(.secondary)
+                TextField("Vad ändrar denna PR?", text: $body, axis: .vertical)
+                    .lineLimit(3...8)
+                    .font(.system(size: 13))
+                    .textFieldStyle(.plain)
+                    .padding(10)
+                    .background(Color.inputBackground)
+                    .cornerRadius(8)
+                    .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.inputBorder, lineWidth: 0.5))
+            }
+
+            // Branch pickers
+            HStack(spacing: 16) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Från").font(.system(size: 12, weight: .semibold)).foregroundColor(.secondary)
+                    Menu {
+                        ForEach(branches) { branch in
+                            Button(branch.name) { headBranch = branch.name }
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "arrow.triangle.branch").font(.system(size: 10))
+                            Text(headBranch).font(.system(size: 12, weight: .medium))
+                            Image(systemName: "chevron.down").font(.system(size: 8))
+                        }
+                        .foregroundColor(.primary)
+                        .padding(.horizontal, 10).padding(.vertical, 6)
+                        .background(Color.white.opacity(0.08))
+                        .cornerRadius(6)
+                    }
+                    .buttonStyle(.plain)
+                }
+                Image(systemName: "arrow.right").font(.system(size: 12)).foregroundColor(.secondary)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Till").font(.system(size: 12, weight: .semibold)).foregroundColor(.secondary)
+                    Menu {
+                        ForEach(branches) { branch in
+                            Button(branch.name) { baseBranch = branch.name }
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "arrow.triangle.branch").font(.system(size: 10))
+                            Text(baseBranch).font(.system(size: 12, weight: .medium))
+                            Image(systemName: "chevron.down").font(.system(size: 8))
+                        }
+                        .foregroundColor(.primary)
+                        .padding(.horizontal, 10).padding(.vertical, 6)
+                        .background(Color.white.opacity(0.08))
+                        .cornerRadius(6)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            if !error.isEmpty {
+                Text(error).font(.system(size: 12)).foregroundColor(.red)
+            }
+
+            HStack {
+                Button("Avbryt") { dismiss() }.buttonStyle(.plain).foregroundColor(.secondary)
+                Spacer()
+                Button {
+                    Task { await create() }
+                } label: {
+                    HStack(spacing: 6) {
+                        if isCreating { ProgressView().scaleEffect(0.7) }
+                        Text(isCreating ? "Skapar…" : "Skapa PR").fontWeight(.semibold)
+                    }
+                }
+                .buttonStyle(.plain)
+                .foregroundColor(canCreate ? .accentEon : .secondary)
+                .disabled(!canCreate || isCreating)
+            }
+        }
+        .padding(24)
+        .frame(width: 460)
+        .background(Color.chatBackground)
+        .preferredColorScheme(.dark)
+    }
+
+    private var canCreate: Bool {
+        !title.trimmingCharacters(in: .whitespaces).isEmpty && headBranch != baseBranch
+    }
+
+    private func create() async {
+        isCreating = true
+        error = ""
+        do {
+            let _ = try await gh.createPullRequest(
+                repo: repo,
+                title: title.trimmingCharacters(in: .whitespaces),
+                body: body.trimmingCharacters(in: .whitespaces),
+                head: headBranch,
+                base: baseBranch
+            )
+            onCreated?()
+            dismiss()
+        } catch {
+            self.error = error.localizedDescription
+        }
+        isCreating = false
     }
 }
 
