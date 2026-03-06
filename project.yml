@@ -29,6 +29,8 @@ targets:
         excludes:
           - "**/*.DS_Store"
       - path: EonCode/iOS
+      - path: mockups
+        optional: true
     resources:
       - path: EonCode/iOS/Assets.xcassets
         optional: true
@@ -76,6 +78,8 @@ targets:
         excludes:
           - "**/*.DS_Store"
       - path: EonCode/macOS
+      - path: mockups
+        optional: true
     resources:
       - path: EonCode/macOS/Assets.xcassets
         optional: true

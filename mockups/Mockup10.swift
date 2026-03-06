@@ -2,6 +2,7 @@
 // Looks like a native macOS app. Apple HIG. System colors, system fonts. Toolbar. Professional.
 import SwiftUI
 
+#if os(macOS)
 struct Mockup10: View {
     @State private var selectedTab = 0
     @State private var selectedProject: String? = "Eon X"
@@ -77,53 +78,61 @@ struct Mockup10: View {
 
     var nativeSidebar: some View {
         List(selection: $selectedTab) {
-            Section("Navigation") {
-                Button { selectedTab = 0 } label: { Label("Projekt", systemImage: "folder") }
-                    .listRowBackground(selectedTab == 0 ? Color.accentColor.opacity(0.15) : nil)
-                Button { selectedTab = 1 } label: { Label("Chatt", systemImage: "bubble.left.and.bubble.right") }
-                    .listRowBackground(selectedTab == 1 ? Color.accentColor.opacity(0.15) : nil)
-                Button { selectedTab = 2 } label: { Label("Webbläsare", systemImage: "globe") }
-                    .listRowBackground(selectedTab == 2 ? Color.accentColor.opacity(0.15) : nil)
-                Button { selectedTab = 3 } label: { Label("Inställningar", systemImage: "gearshape") }
-                    .listRowBackground(selectedTab == 3 ? Color.accentColor.opacity(0.15) : nil)
-            }
-
-            if selectedTab == 0 {
-                Section("Projekt") {
-                    ForEach(projects, id: \.0) { name, files in
-                        DisclosureGroup(
-                            isExpanded: Binding(
-                                get: { expandedProjects.contains(name) },
-                                set: { if $0 { expandedProjects.insert(name) } else { expandedProjects.remove(name) } }
-                            )
-                        ) {
-                            ForEach(files, id: \.self) { file in
-                                Button {
-                                    selectedFile = file
-                                    selectedProject = name
-                                    selectedTab = 0
-                                } label: {
-                                    Label(file, systemImage: "doc.text").font(.callout)
-                                }
-                                .listRowBackground(selectedFile == file ? Color.accentColor.opacity(0.1) : nil)
-                            }
-                        } label: {
-                            Label(name, systemImage: "folder.fill").font(.callout.weight(.medium))
-                        }
-                    }
-                }
-            }
-
-            Section {
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "circle.fill").font(.system(size: 6)).foregroundStyle(.orange)
-                        Text("Agent: Bygger Eon X — 7/12").font(.caption)
-                    }
-                    Text("Kostnad: 2.45 SEK").font(.caption2).foregroundStyle(.secondary)
-                }
-            }
+            navSection
+            if selectedTab == 0 { projectSection }
+            statusSection
         }.listStyle(.sidebar)
+    }
+
+    @ViewBuilder var navSection: some View {
+        Section("Navigation") {
+            Button { selectedTab = 0 } label: { Label("Projekt", systemImage: "folder") }
+                .listRowBackground(selectedTab == 0 ? Color.accentColor.opacity(0.15) : nil)
+            Button { selectedTab = 1 } label: { Label("Chatt", systemImage: "bubble.left.and.bubble.right") }
+                .listRowBackground(selectedTab == 1 ? Color.accentColor.opacity(0.15) : nil)
+            Button { selectedTab = 2 } label: { Label("Webbläsare", systemImage: "globe") }
+                .listRowBackground(selectedTab == 2 ? Color.accentColor.opacity(0.15) : nil)
+            Button { selectedTab = 3 } label: { Label("Inställningar", systemImage: "gearshape") }
+                .listRowBackground(selectedTab == 3 ? Color.accentColor.opacity(0.15) : nil)
+        }
+    }
+
+    @ViewBuilder var projectSection: some View {
+        Section("Projekt") {
+            ForEach(projects, id: \.0) { name, files in
+                DisclosureGroup(
+                    isExpanded: Binding(
+                        get: { expandedProjects.contains(name) },
+                        set: { if $0 { expandedProjects.insert(name) } else { expandedProjects.remove(name) } }
+                    )
+                ) {
+                    ForEach(files, id: \.self) { file in
+                        Button {
+                            selectedFile = file
+                            selectedProject = name
+                            selectedTab = 0
+                        } label: {
+                            Label(file, systemImage: "doc.text").font(.callout)
+                        }
+                        .listRowBackground(selectedFile == file ? Color.accentColor.opacity(0.1) : nil)
+                    }
+                } label: {
+                    Label(name, systemImage: "folder.fill").font(.callout.weight(.medium))
+                }
+            }
+        }
+    }
+
+    @ViewBuilder var statusSection: some View {
+        Section {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 4) {
+                    Image(systemName: "circle.fill").font(.system(size: 6)).foregroundStyle(.orange)
+                    Text("Agent: Bygger Eon X — 7/12").font(.caption)
+                }
+                Text("Kostnad: 2.45 SEK").font(.caption2).foregroundStyle(.secondary)
+            }
+        }
     }
 
     @ViewBuilder var mainContent: some View {
@@ -311,3 +320,4 @@ struct Mockup10: View {
 }
 
 #Preview { Mockup10() }
+#endif
