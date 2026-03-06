@@ -115,6 +115,15 @@ struct FileNodeRow: View {
             }
         }
         .padding(.horizontal, 4)
+        .alert("Ta bort \"\(node.name)\"?", isPresented: $showDeleteConfirmation) {
+            Button("Avbryt", role: .cancel) {}
+            Button("Ta bort", role: .destructive) {
+                try? FileManager.default.removeItem(atPath: node.path)
+                if selectedNode?.id == node.id { selectedNode = nil }
+            }
+        } message: {
+            Text(node.isDirectory ? "Mappen och allt dess innehåll tas bort permanent." : "Filen tas bort permanent.")
+        }
     }
 
     var iconColor: Color {
@@ -150,15 +159,6 @@ struct FileNodeRow: View {
         Button("Ta bort", role: .destructive) {
             showDeleteConfirmation = true
         }
-    }
-    .alert("Ta bort \"\(node.name)\"?", isPresented: $showDeleteConfirmation) {
-        Button("Avbryt", role: .cancel) {}
-        Button("Ta bort", role: .destructive) {
-            try? FileManager.default.removeItem(atPath: node.path)
-            if selectedNode?.id == node.id { selectedNode = nil }
-        }
-    } message: {
-        Text(node.isDirectory ? "Mappen och allt dess innehåll tas bort permanent." : "Filen tas bort permanent.")
     }
 }
 

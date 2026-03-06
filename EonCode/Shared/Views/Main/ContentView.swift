@@ -269,7 +269,7 @@ struct ContentView: View {
 
         case .browser:
             Circle()
-                .fill(browserAgent.status == .working ? Color.green : Color.secondary.opacity(0.3))
+                .fill({ if case .working = browserAgent.status { return Color.green } else { return Color.secondary.opacity(0.3) } }())
                 .frame(width: 8, height: 8)
 
         case .plan:

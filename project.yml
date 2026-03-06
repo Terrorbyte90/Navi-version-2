@@ -58,6 +58,10 @@ targets:
         NSLocalNetworkUsageDescription: "EonCode uses local network for peer sync between your Mac and iPhone."
         NSBonjourServices:
           - _eoncode._tcp
+          - _eoncode-http._tcp
+        NSCameraUsageDescription: "EonCode uses the camera to attach images to your messages."
+        NSPhotoLibraryUsageDescription: "EonCode accesses your photo library to attach images to your messages."
+        ITSAppUsesNonExemptEncryption: false
         UIBackgroundModes:
           - remote-notification
           - background-fetch
@@ -94,3 +98,5 @@ targets:
         NSLocalNetworkUsageDescription: "EonCode uses local network for peer sync."
         NSBonjourServices:
           - _eoncode._tcp
+          - _eoncode-http._tcp
+        ITSAppUsesNonExemptEncryption: false

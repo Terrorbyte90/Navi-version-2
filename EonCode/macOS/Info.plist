@@ -20,9 +20,12 @@
 	<string>1.0</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>NSBonjourServices</key>
 	<array>
 		<string>_eoncode._tcp</string>
+		<string>_eoncode-http._tcp</string>
 	</array>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>EonCode uses local network for peer sync.</string>

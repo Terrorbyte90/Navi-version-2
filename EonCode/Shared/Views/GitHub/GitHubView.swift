@@ -1205,7 +1205,7 @@ struct CreatePRSheet: View {
     var onCreated: (() -> Void)?
 
     @State private var title = ""
-    @State private var body = ""
+    @State private var prBody = ""
     @State private var headBranch: String
     @State private var baseBranch: String
     @State private var isCreating = false
@@ -1241,7 +1241,7 @@ struct CreatePRSheet: View {
             // Description
             VStack(alignment: .leading, spacing: 6) {
                 Text("Beskrivning").font(.system(size: 12, weight: .semibold)).foregroundColor(.secondary)
-                TextField("Vad ändrar denna PR?", text: $body, axis: .vertical)
+                TextField("Vad ändrar denna PR?", text: $prBody, axis: .vertical)
                     .lineLimit(3...8)
                     .font(.system(size: 13))
                     .textFieldStyle(.plain)
@@ -1331,7 +1331,7 @@ struct CreatePRSheet: View {
             let _ = try await gh.createPullRequest(
                 repo: repo,
                 title: title.trimmingCharacters(in: .whitespaces),
-                body: body.trimmingCharacters(in: .whitespaces),
+                body: prBody.trimmingCharacters(in: .whitespaces),
                 head: headBranch,
                 base: baseBranch
             )

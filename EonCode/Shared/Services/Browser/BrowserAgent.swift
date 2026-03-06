@@ -54,9 +54,12 @@ struct BrowserSessionCost {
         totalInputTokens += usage.inputTokens
         totalOutputTokens += usage.outputTokens
         apiCalls += 1
-        let (usd, sek) = CostCalculator.shared.calculate(usage: usage, model: model)
+        // Inline cost calculation to avoid main-actor isolation issues
+        let inputCostUSD = Double(usage.inputTokens) * model.inputPricePerMTok / 1_000_000.0
+        let outputCostUSD = Double(usage.outputTokens) * model.outputPricePerMTok / 1_000_000.0
+        let usd = inputCostUSD + outputCostUSD
         costUSD += usd
-        costSEK += sek
+        costSEK += usd * 10.5
     }
 
     var formatted: String {

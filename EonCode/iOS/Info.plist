@@ -20,12 +20,19 @@
 	<string>1.0</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>NSBonjourServices</key>
 	<array>
 		<string>_eoncode._tcp</string>
+		<string>_eoncode-http._tcp</string>
 	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>EonCode uses the camera to attach images to your messages.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>EonCode uses local network for peer sync between your Mac and iPhone.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>EonCode accesses your photo library to attach images to your messages.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
