@@ -18,7 +18,7 @@ struct BrowserAgentLogView: View {
                             Circle()
                                 .fill(statusColor.opacity(0.3))
                                 .frame(width: 13, height: 13)
-                                .opacity(agent.status == .working ? 1 : 0)
+                                .opacity(isWorking ? 1 : 0)
                         )
                     Text(statusLabel)
                         .font(.system(size: 12, weight: .medium))
@@ -37,7 +37,7 @@ struct BrowserAgentLogView: View {
                         .cornerRadius(4)
                 }
 
-                if agent.status == .working {
+                if isWorking {
                     ProgressView()
                         .scaleEffect(0.55)
                         .frame(width: 14, height: 14)
@@ -77,7 +77,12 @@ struct BrowserAgentLogView: View {
         .background(Color.chatBackground)
     }
 
-    // MARK: - Empty state
+    // MARK: - Helpers
+
+    private var isWorking: Bool {
+        if case .working = agent.status { return true }
+        return agent.status == .planning
+    }
 
     private var emptyState: some View {
         VStack(spacing: 8) {
@@ -91,11 +96,10 @@ struct BrowserAgentLogView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    // MARK: - Status helpers
-
     private var statusColor: Color {
         switch agent.status {
         case .idle:           return .secondary
+        case .planning:       return .orange
         case .working:        return .green
         case .waitingForUser: return .yellow
         case .complete:       return .accentEon
@@ -105,11 +109,12 @@ struct BrowserAgentLogView: View {
 
     private var statusLabel: String {
         switch agent.status {
-        case .idle:           return "Inaktiv"
-        case .working:        return "Arbetar"
-        case .waitingForUser: return "Väntar på dig"
-        case .complete:       return "Klar"
-        case .failed:         return "Misslyckades"
+        case .idle:                    return "Inaktiv"
+        case .planning:                return "Planerar..."
+        case .working(let s, let t):   return "Steg \(s)/\(t)"
+        case .waitingForUser:          return "Väntar på dig"
+        case .complete:                return "Klar"
+        case .failed:                  return "Misslyckades"
         }
     }
 }
@@ -120,42 +125,39 @@ struct BrowserLogEntryRow: View {
     let entry: BrowserLogEntry
 
     private var entryIcon: String {
-        let t = entry.displayText
-        if t.hasPrefix("🎯") { return "target" }
-        if t.hasPrefix("🌐") { return "globe" }
-        if t.hasPrefix("👆") { return "cursorarrow.click" }
-        if t.hasPrefix("⌨️") { return "keyboard" }
-        if t.hasPrefix("📜") { return "arrow.down" }
-        if t.hasPrefix("📸") { return "camera" }
-        if t.hasPrefix("⏳") { return "clock" }
-        if t.hasPrefix("❓") { return "questionmark.circle" }
-        if t.hasPrefix("💬") { return "bubble.left" }
-        if t.hasPrefix("✅") { return "checkmark.circle.fill" }
-        if t.hasPrefix("❌") || entry.isError { return "xmark.circle.fill" }
-        if t.hasPrefix("⚠️") { return "exclamationmark.triangle.fill" }
-        if t.hasPrefix("🔄") { return "arrow.clockwise" }
-        if t.hasPrefix("👁") { return "eye" }
-        return "circle.fill"
+        switch entry.type {
+        case .goal:       return "target"
+        case .subGoal:    return "arrow.triangle.branch"
+        case .navigate:   return "globe"
+        case .click:      return "cursorarrow.click"
+        case .typeText:   return "keyboard"
+        case .scroll:     return "arrow.down"
+        case .screenshot: return "camera"
+        case .vision:     return "eye"
+        case .thinking:   return "brain"
+        case .question:   return "questionmark.circle"
+        case .answer:     return "bubble.left"
+        case .success:    return "checkmark.circle.fill"
+        case .failure:    return "xmark.circle.fill"
+        case .warning:    return "exclamationmark.triangle.fill"
+        case .retry:      return "arrow.clockwise"
+        case .info:       return "circle.fill"
+        case .cost:       return "creditcard"
+        }
     }
 
     private var iconColor: Color {
         if entry.isError { return .red }
-        let t = entry.displayText
-        if t.hasPrefix("✅") { return .green }
-        if t.hasPrefix("❓") || t.hasPrefix("💬") { return .yellow }
-        if t.hasPrefix("🎯") { return .accentEon }
-        if t.hasPrefix("⚠️") { return .orange }
-        return .secondary.opacity(0.6)
-    }
-
-    // Strip leading emoji for clean display
-    private var cleanText: String {
-        let emojis = ["🎯 ", "🌐 ", "👆 ", "⌨️ ", "📜 ", "📸 ", "⏳ ", "❓ ", "💬 ", "✅ ", "❌ ", "⚠️ ", "🔄 ", "👁 "]
-        var t = entry.displayText
-        for e in emojis {
-            if t.hasPrefix(e) { t = String(t.dropFirst(e.count)); break }
+        switch entry.type {
+        case .success:             return .green
+        case .failure:             return .red
+        case .warning:             return .orange
+        case .question, .answer:   return .yellow
+        case .goal, .subGoal:      return .accentEon
+        case .vision, .screenshot: return .purple
+        case .cost:                return .cyan
+        default:                   return .secondary.opacity(0.6)
         }
-        return t
     }
 
     var body: some View {
@@ -167,7 +169,7 @@ struct BrowserLogEntryRow: View {
                 .padding(.top, 1)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(cleanText)
+                Text(entry.displayText)
                     .font(.system(size: 12))
                     .foregroundColor(entry.isError ? .red.opacity(0.9) : .primary.opacity(0.75))
                     .fixedSize(horizontal: false, vertical: true)
