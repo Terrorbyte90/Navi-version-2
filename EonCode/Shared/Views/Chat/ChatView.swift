@@ -355,16 +355,8 @@ struct MessageBubble: View {
             } else {
                 // Assistant message: full-width, no bubble, with icon
                 HStack(alignment: .top, spacing: 12) {
-                    // Assistant avatar
-                    ZStack {
-                        Circle()
-                            .fill(Color.accentEon.opacity(0.15))
-                            .frame(width: 28, height: 28)
-                        Image(systemName: "sparkle")
-                            .font(.system(size: 13))
-                            .foregroundColor(.accentEon)
-                    }
-                    .padding(.top, 2)
+                    AssistantAvatar()
+                        .padding(.top, 2)
 
                     VStack(alignment: .leading, spacing: 6) {
                         // Model label
@@ -510,8 +502,8 @@ struct CodeBlockView: View {
             // Header
             HStack {
                 Text(language ?? "code")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.secondary)
+                    .font(.system(size: 12, weight: .medium, design: .monospaced))
+                    .foregroundColor(.secondary.opacity(0.6))
                 Spacer()
                 Button {
                     copyCode()
@@ -519,16 +511,23 @@ struct CodeBlockView: View {
                     HStack(spacing: 4) {
                         Image(systemName: copied ? "checkmark" : "doc.on.doc")
                             .font(.system(size: 11))
-                        Text(copied ? "Kopierad" : "Kopiera")
+                        Text(copied ? "Kopierad!" : "Kopiera")
                             .font(.system(size: 12))
                     }
-                    .foregroundColor(copied ? .green : .secondary)
+                    .foregroundColor(copied ? .green : .secondary.opacity(0.5))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(
+                        Capsule()
+                            .fill(copied ? Color.green.opacity(0.1) : Color.white.opacity(0.04))
+                    )
                 }
                 .buttonStyle(.plain)
+                .animation(.easeInOut(duration: 0.15), value: copied)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
-            .background(Color(red: 0.08, green: 0.08, blue: 0.08))
+            .background(Color(red: 0.07, green: 0.07, blue: 0.07))
 
             // Code
             ScrollView(.horizontal, showsIndicators: false) {
@@ -542,7 +541,7 @@ struct CodeBlockView: View {
         )
         .overlay(
             RoundedRectangle(cornerRadius: 12)
-                .strokeBorder(Color.dividerColor, lineWidth: 1)
+                .strokeBorder(Color.white.opacity(0.06), lineWidth: 0.5)
         )
     }
 
@@ -562,38 +561,45 @@ struct CodeBlockView: View {
 
 struct StreamingBubble: View {
     let text: String
+    @State private var cursorVisible = true
 
     var body: some View {
         if text.isEmpty {
             TypingIndicator()
         } else {
             HStack(alignment: .top, spacing: 12) {
-                ZStack {
-                    Circle()
-                        .fill(Color.accentEon.opacity(0.15))
-                        .frame(width: 28, height: 28)
-                    Image(systemName: "sparkle")
-                        .font(.system(size: 13))
-                        .foregroundColor(.accentEon)
-                }
-                .padding(.top, 2)
+                AssistantAvatar()
+                    .padding(.top, 2)
 
                 VStack(alignment: .leading, spacing: 6) {
                     Text("EonCode")
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(.primary)
 
-                    Text(text.suffix(3000))
-                        .font(.system(size: 15))
-                        .foregroundColor(.primary)
-                        .lineSpacing(4)
-                        .textSelection(.enabled)
+                    HStack(alignment: .lastTextBaseline, spacing: 0) {
+                        Text(text.suffix(3000))
+                            .font(.system(size: 15))
+                            .foregroundColor(.primary)
+                            .lineSpacing(4)
+                            .textSelection(.enabled)
+
+                        RoundedRectangle(cornerRadius: 1)
+                            .fill(Color.accentEon)
+                            .frame(width: 2, height: 16)
+                            .opacity(cursorVisible ? 1 : 0)
+                            .padding(.leading, 2)
+                    }
                 }
 
                 Spacer(minLength: 20)
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 12)
+            .onAppear {
+                withAnimation(.easeInOut(duration: 0.5).repeatForever(autoreverses: true)) {
+                    cursorVisible = false
+                }
+            }
         }
     }
 }
@@ -605,15 +611,8 @@ struct TypingIndicator: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            ZStack {
-                Circle()
-                    .fill(Color.accentEon.opacity(0.15))
-                    .frame(width: 28, height: 28)
-                Image(systemName: "sparkle")
-                    .font(.system(size: 13))
-                    .foregroundColor(.accentEon)
-            }
-            .padding(.top, 2)
+            AssistantAvatar()
+                .padding(.top, 2)
 
             HStack(spacing: 5) {
                 ForEach(0..<3, id: \.self) { i in
@@ -858,6 +857,29 @@ struct InputBar: View {
     ) {}
     .background(Color.chatBackground)
     .preferredColorScheme(.dark)
+}
+
+// MARK: - Reusable Assistant Avatar
+
+struct AssistantAvatar: View {
+    var size: CGFloat = 28
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(
+                    LinearGradient(
+                        colors: [Color.accentEon.opacity(0.2), Color.accentEon.opacity(0.08)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .frame(width: size, height: size)
+            Image(systemName: "sparkle")
+                .font(.system(size: size * 0.46, weight: .medium))
+                .foregroundColor(.accentEon)
+        }
+    }
 }
 
 // MARK: - Platform image helpers

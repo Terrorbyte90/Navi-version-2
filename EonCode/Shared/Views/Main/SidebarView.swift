@@ -61,10 +61,15 @@ struct SidebarView: View {
 
     var sidebarHeader: some View {
         HStack(spacing: 0) {
-            Text("EonCode")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(.primary.opacity(0.7))
-                .padding(.leading, 14)
+            HStack(spacing: 6) {
+                Image(systemName: "sparkle")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(.accentEon)
+                Text("EonCode")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(.primary.opacity(0.7))
+            }
+            .padding(.leading, 14)
 
             Spacer()
 
@@ -164,15 +169,16 @@ struct SidebarView: View {
 
     @ViewBuilder
     private func navItem(icon: String, label: String, target: AppSection, badge: String? = nil) -> some View {
+        let isActive = section == target
         Button { section = target } label: {
             HStack(spacing: 9) {
                 Image(systemName: icon)
                     .font(.system(size: 13))
-                    .foregroundColor(section == target ? .white : .secondary)
+                    .foregroundColor(isActive ? .accentEon : .secondary)
                     .frame(width: 18)
                 Text(label)
-                    .font(.system(size: 13, weight: section == target ? .semibold : .regular))
-                    .foregroundColor(section == target ? .white : .primary)
+                    .font(.system(size: 13, weight: isActive ? .semibold : .regular))
+                    .foregroundColor(isActive ? .white : .primary.opacity(0.85))
                 Spacer()
                 if let badge {
                     Text(badge)
@@ -187,8 +193,8 @@ struct SidebarView: View {
             .padding(.horizontal, 9)
             .padding(.vertical, 7)
             .background(
-                RoundedRectangle(cornerRadius: 7)
-                    .fill(section == target ? Color.white.opacity(0.08) : Color.clear)
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(isActive ? Color.white.opacity(0.08) : Color.clear)
             )
         }
         .buttonStyle(.plain)

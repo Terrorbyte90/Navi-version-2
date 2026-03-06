@@ -104,14 +104,22 @@ struct BrowserGlassBar: View {
                             .font(.system(size: 12, weight: .semibold))
                     }
                     .foregroundColor(.white.opacity(0.9))
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 7)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
                     .background(
                         Capsule()
                             .fill(.ultraThinMaterial)
                             .overlay(
-                                Capsule().strokeBorder(Color.white.opacity(0.15), lineWidth: 0.5)
+                                Capsule().strokeBorder(
+                                    LinearGradient(
+                                        colors: [Color.white.opacity(0.2), Color.white.opacity(0.05)],
+                                        startPoint: .top,
+                                        endPoint: .bottom
+                                    ),
+                                    lineWidth: 0.5
+                                )
                             )
+                            .shadow(color: .black.opacity(0.3), radius: 8, y: 4)
                     )
                 }
                 .buttonStyle(.plain)
@@ -220,14 +228,32 @@ struct BrowserGlassBar: View {
             Rectangle()
                 .fill(.ultraThinMaterial)
             Rectangle()
-                .fill(Color.black.opacity(0.4))
+                .fill(Color.black.opacity(0.35))
         }
         .overlay(alignment: .top) {
-            // Loading progress
+            // Top highlight line for glass effect
+            Rectangle()
+                .fill(
+                    LinearGradient(
+                        colors: [Color.white.opacity(0.08), Color.white.opacity(0.02)],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+                .frame(height: 0.5)
+        }
+        .overlay(alignment: .top) {
+            // Loading progress bar
             if isWorking && agent.loadingProgress > 0 && agent.loadingProgress < 1 {
                 GeometryReader { geo in
-                    Rectangle()
-                        .fill(Color.accentEon.opacity(0.6))
+                    RoundedRectangle(cornerRadius: 1)
+                        .fill(
+                            LinearGradient(
+                                colors: [Color.accentEon.opacity(0.8), Color.accentEon.opacity(0.4)],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
                         .frame(width: geo.size.width * agent.loadingProgress, height: 2)
                         .animation(.easeInOut(duration: 0.3), value: agent.loadingProgress)
                 }
@@ -235,6 +261,8 @@ struct BrowserGlassBar: View {
             }
         }
     }
+
+    @State private var dotPulsing = false
 
     @ViewBuilder
     private var statusDot: some View {
@@ -245,8 +273,18 @@ struct BrowserGlassBar: View {
                 Circle()
                     .fill(dotColor.opacity(0.3))
                     .frame(width: 12, height: 12)
+                    .scaleEffect(dotPulsing ? 1.3 : 1.0)
                     .opacity(isWorking ? 1 : 0)
             )
+            .onChange(of: isWorking) { working in
+                if working {
+                    withAnimation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true)) {
+                        dotPulsing = true
+                    }
+                } else {
+                    dotPulsing = false
+                }
+            }
     }
 
     @ViewBuilder
@@ -496,35 +534,44 @@ struct BrowserAddressBar: View {
                str.hasPrefix("http://")  ? String(str.dropFirst(7)) : str
     }
 
+    var displayHost: String {
+        agent.currentURL?.host ?? ""
+    }
+
     var body: some View {
-        HStack(spacing: 10) {
-            HStack(spacing: 4) {
+        HStack(spacing: 8) {
+            // Nav buttons
+            HStack(spacing: 2) {
                 Button { agent.webView.goBack() } label: {
                     Image(systemName: "chevron.left")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(agent.webView.canGoBack ? .primary : .secondary.opacity(0.3))
-                        .frame(width: 28, height: 28)
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundColor(agent.webView.canGoBack ? .primary : .secondary.opacity(0.25))
+                        .frame(width: 32, height: 32)
+                        .contentShape(Circle())
                 }
                 .buttonStyle(.plain)
                 .disabled(!agent.webView.canGoBack)
 
                 Button { agent.webView.goForward() } label: {
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(agent.webView.canGoForward ? .primary : .secondary.opacity(0.3))
-                        .frame(width: 28, height: 28)
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundColor(agent.webView.canGoForward ? .primary : .secondary.opacity(0.25))
+                        .frame(width: 32, height: 32)
+                        .contentShape(Circle())
                 }
                 .buttonStyle(.plain)
                 .disabled(!agent.webView.canGoForward)
             }
 
-            HStack(spacing: 6) {
+            // URL capsule
+            HStack(spacing: 8) {
+                // SSL / globe icon
                 Image(systemName: agent.currentURL?.scheme == "https" ? "lock.fill" : "globe")
-                    .font(.system(size: 11))
-                    .foregroundColor(agent.currentURL?.scheme == "https" ? .green : .secondary)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(agent.currentURL?.scheme == "https" ? .green.opacity(0.8) : .secondary.opacity(0.5))
 
                 if editingURL {
-                    TextField("URL eller sökterm", text: $urlText)
+                    TextField("Sök eller ange webbadress", text: $urlText)
                         .textFieldStyle(.plain)
                         .font(.system(size: 14))
                         .focused($urlFocused)
@@ -534,33 +581,43 @@ struct BrowserAddressBar: View {
                             urlFocused = true
                         }
                 } else {
-                    Text(displayURL.isEmpty ? "Ange URL…" : displayURL)
+                    // Show just the host for a cleaner look, full URL on tap
+                    Text(displayURL.isEmpty ? "Sök eller ange webbadress" : (displayHost.isEmpty ? displayURL : displayHost))
                         .font(.system(size: 14))
-                        .foregroundColor(displayURL.isEmpty ? .secondary.opacity(0.4) : .primary)
+                        .foregroundColor(displayURL.isEmpty ? .secondary.opacity(0.4) : .primary.opacity(0.85))
                         .lineLimit(1).truncationMode(.middle)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .contentShape(Rectangle())
                         .onTapGesture { editingURL = true }
                 }
 
-                if !displayURL.isEmpty {
+                // Reload button
+                if !displayURL.isEmpty && !editingURL {
                     Button { agent.webView.reload() } label: {
                         Image(systemName: "arrow.clockwise")
-                            .font(.system(size: 11)).foregroundColor(.secondary)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(.secondary.opacity(0.5))
+                            .frame(width: 24, height: 24)
+                            .contentShape(Circle())
                     }
                     .buttonStyle(.plain)
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 9)
             .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(Color.inputBackground)
+                Capsule()
+                    .fill(Color.white.opacity(0.06))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .strokeBorder(editingURL ? Color.accentEon.opacity(0.5) : Color.inputBorder, lineWidth: 1)
+                        Capsule()
+                            .strokeBorder(
+                                editingURL ? Color.accentEon.opacity(0.4) : Color.white.opacity(0.08),
+                                lineWidth: editingURL ? 1.5 : 0.5
+                            )
                     )
             )
             .frame(maxWidth: .infinity)
+            .animation(.easeInOut(duration: 0.15), value: editingURL)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)

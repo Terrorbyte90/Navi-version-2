@@ -313,24 +313,48 @@ struct ContentView: View {
     var iOSWelcome: some View {
         VStack(spacing: 32) {
             Spacer()
-            Image(systemName: "sparkles")
-                .font(.system(size: 52))
-                .foregroundColor(.accentEon.opacity(0.7))
+            ZStack {
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            colors: [Color.accentEon.opacity(0.12), Color.accentEon.opacity(0.02)],
+                            center: .center,
+                            startRadius: 0,
+                            endRadius: 48
+                        )
+                    )
+                    .frame(width: 80, height: 80)
+                Image(systemName: "sparkles")
+                    .font(.system(size: 36, weight: .medium))
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [.accentEon, .accentEon.opacity(0.65)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+            }
             VStack(spacing: 8) {
                 Text("EonCode")
                     .font(.system(size: 32, weight: .bold, design: .rounded))
                 Text("Välj ett projekt i sidomenyn")
                     .font(.system(size: 15))
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.secondary.opacity(0.7))
             }
             Button { openSidebar() } label: {
                 Label("Öppna sidomenyn", systemImage: "sidebar.left")
                     .font(.system(size: 15, weight: .medium))
                     .foregroundColor(.accentEon)
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 12)
-                    .background(Color.accentEon.opacity(0.1))
-                    .cornerRadius(12)
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 13)
+                    .background(
+                        RoundedRectangle(cornerRadius: 14)
+                            .fill(Color.accentEon.opacity(0.1))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14)
+                                    .strokeBorder(Color.accentEon.opacity(0.2), lineWidth: 0.5)
+                            )
+                    )
             }
             Spacer()
         }
@@ -580,15 +604,33 @@ struct WelcomeView: View {
         VStack(spacing: 24) {
             Spacer()
 
-            VStack(spacing: 8) {
-                Image(systemName: "sparkles")
-                    .font(.system(size: 56))
-                    .foregroundColor(.accentEon)
+            VStack(spacing: 12) {
+                ZStack {
+                    Circle()
+                        .fill(
+                            RadialGradient(
+                                colors: [Color.accentEon.opacity(0.12), Color.accentEon.opacity(0.02)],
+                                center: .center,
+                                startRadius: 0,
+                                endRadius: 48
+                            )
+                        )
+                        .frame(width: 80, height: 80)
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 36, weight: .medium))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [.accentEon, .accentEon.opacity(0.65)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                }
                 Text("EonCode")
                     .font(.system(size: 36, weight: .bold, design: .rounded))
                 Text("AI-driven kodningsagent")
                     .font(.system(size: 16))
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.secondary.opacity(0.7))
             }
 
             if store.projects.isEmpty {

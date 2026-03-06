@@ -42,7 +42,7 @@ struct ChatHistorySidebar: View {
             bottomBar
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(UIColor.systemBackground))
+        .background(Color.sidebarBackground)
         .ignoresSafeArea(edges: .vertical)   // let topBar/bottomBar handle safe area manually
         .sheet(isPresented: $showSettings) { SettingsView() }
         .sheet(isPresented: $showOpenProject) {
@@ -71,7 +71,7 @@ struct ChatHistorySidebar: View {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
-            .background(Color(UIColor.secondarySystemBackground))
+            .background(Color.white.opacity(0.06))
             .cornerRadius(10)
 
             // New item button — context-aware
@@ -294,7 +294,7 @@ struct ChatHistorySidebar: View {
             .padding(.vertical, 10)
             .background(
                 agent?.conversation.id == conv.id
-                    ? Color(UIColor.secondarySystemBackground) : Color.clear
+                    ? Color.white.opacity(0.08) : Color.clear
             )
         }
         .buttonStyle(.plain)
@@ -335,7 +335,7 @@ struct ChatHistorySidebar: View {
             .padding(.vertical, 10)
             .background(
                 projectStore.activeProject?.id == project.id
-                    ? Color(UIColor.secondarySystemBackground) : Color.clear
+                    ? Color.white.opacity(0.08) : Color.clear
             )
         }
         .buttonStyle(.plain)
@@ -425,7 +425,7 @@ struct ChatHistorySidebar: View {
             .padding(.vertical, 10)
             .background(
                 planManager.activePlan?.id == plan.id
-                    ? Color(UIColor.secondarySystemBackground) : Color.clear
+                    ? Color.white.opacity(0.08) : Color.clear
             )
         }
         .buttonStyle(.plain)
@@ -577,7 +577,7 @@ struct ChatHistorySidebar: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
-        .background(isActive ? Color(UIColor.secondarySystemBackground) : Color.clear)
+        .background(isActive ? Color.white.opacity(0.08) : Color.clear)
     }
 
     @ViewBuilder
@@ -613,7 +613,7 @@ struct ChatHistorySidebar: View {
                         .foregroundColor(.secondary)
                         .padding(.horizontal, 7)
                         .padding(.vertical, 2)
-                        .background(Color(UIColor.tertiarySystemBackground))
+                        .background(Color.white.opacity(0.06))
                         .cornerRadius(10)
                 }
             }
@@ -621,7 +621,7 @@ struct ChatHistorySidebar: View {
             .padding(.vertical, 9)
             .background(
                 RoundedRectangle(cornerRadius: 8)
-                    .fill(isActive ? Color(UIColor.secondarySystemBackground) : Color.clear)
+                    .fill(isActive ? Color.white.opacity(0.08) : Color.clear)
             )
         }
         .buttonStyle(.plain)

@@ -259,22 +259,37 @@ struct PureChatView: View {
     }
 
     var chatEmptyState: some View {
-        VStack(spacing: 24) {
+        VStack(spacing: 28) {
             Spacer()
-            VStack(spacing: 12) {
+            VStack(spacing: 16) {
                 ZStack {
                     Circle()
-                        .fill(Color.accentEon.opacity(0.1))
-                        .frame(width: 64, height: 64)
+                        .fill(
+                            RadialGradient(
+                                colors: [Color.accentEon.opacity(0.15), Color.accentEon.opacity(0.03)],
+                                center: .center,
+                                startRadius: 0,
+                                endRadius: 44
+                            )
+                        )
+                        .frame(width: 72, height: 72)
                     Image(systemName: "sparkle")
-                        .font(.system(size: 28))
-                        .foregroundColor(.accentEon)
+                        .font(.system(size: 30, weight: .medium))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [.accentEon, .accentEon.opacity(0.7)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
                 }
-                Text("EonCode")
-                    .font(.system(size: 26, weight: .bold))
-                Text("Hur kan jag hjälpa dig?")
-                    .font(.system(size: 15))
-                    .foregroundColor(.secondary)
+                VStack(spacing: 6) {
+                    Text("EonCode")
+                        .font(.system(size: 28, weight: .bold, design: .rounded))
+                    Text("Hur kan jag hjälpa dig?")
+                        .font(.system(size: 16))
+                        .foregroundColor(.secondary.opacity(0.7))
+                }
             }
             Spacer()
         }
@@ -459,15 +474,8 @@ struct PureChatBubble: View {
             .padding(.vertical, 8)
         } else {
             HStack(alignment: .top, spacing: 12) {
-                ZStack {
-                    Circle()
-                        .fill(Color.accentEon.opacity(0.15))
-                        .frame(width: 28, height: 28)
-                    Image(systemName: "sparkle")
-                        .font(.system(size: 13))
-                        .foregroundColor(.accentEon)
-                }
-                .padding(.top, 2)
+                AssistantAvatar()
+                    .padding(.top, 2)
 
                 VStack(alignment: .leading, spacing: 6) {
                     Text("EonCode")
@@ -555,32 +563,7 @@ struct MarkdownTextView: View {
                         .lineSpacing(4)
                         .fixedSize(horizontal: false, vertical: true)
                 case .code(let lang, let code):
-                    VStack(alignment: .leading, spacing: 0) {
-                        HStack {
-                            if !lang.isEmpty {
-                                Text(lang)
-                                    .font(.system(size: 12, weight: .medium))
-                                    .foregroundColor(.secondary)
-                            }
-                            Spacer()
-                        }
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 8)
-                        .background(Color(red: 0.08, green: 0.08, blue: 0.08))
-
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            Text(code)
-                                .font(.system(size: 13, design: .monospaced))
-                                .padding(14)
-                                .textSelection(.enabled)
-                        }
-                    }
-                    .background(Color.codeBackground)
-                    .cornerRadius(12)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .strokeBorder(Color.dividerColor, lineWidth: 1)
-                    )
+                    MarkdownCodeBlock(language: lang, code: code)
                 }
             }
         }
@@ -618,5 +601,68 @@ struct MarkdownTextView: View {
         if !codeBuf.isEmpty { blocks.append(.code(lang, codeBuf.joined(separator: "\n"))) }
         if !textBuf.isEmpty { blocks.append(.text(textBuf.joined(separator: "\n"))) }
         return blocks
+    }
+}
+
+// MARK: - Markdown Code Block (with copy button)
+
+struct MarkdownCodeBlock: View {
+    let language: String
+    let code: String
+    @State private var copied = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text(language.isEmpty ? "code" : language)
+                    .font(.system(size: 12, weight: .medium, design: .monospaced))
+                    .foregroundColor(.secondary.opacity(0.6))
+                Spacer()
+                Button { copyCode() } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                            .font(.system(size: 11))
+                        Text(copied ? "Kopierad!" : "Kopiera")
+                            .font(.system(size: 12))
+                    }
+                    .foregroundColor(copied ? .green : .secondary.opacity(0.5))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(
+                        Capsule()
+                            .fill(copied ? Color.green.opacity(0.1) : Color.white.opacity(0.04))
+                    )
+                }
+                .buttonStyle(.plain)
+                .animation(.easeInOut(duration: 0.15), value: copied)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .background(Color(red: 0.07, green: 0.07, blue: 0.07))
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                Text(code)
+                    .font(.system(size: 13, design: .monospaced))
+                    .padding(14)
+                    .textSelection(.enabled)
+            }
+        }
+        .background(Color.codeBackground)
+        .cornerRadius(12)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .strokeBorder(Color.white.opacity(0.06), lineWidth: 0.5)
+        )
+    }
+
+    private func copyCode() {
+        #if os(macOS)
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(code, forType: .string)
+        #else
+        UIPasteboard.general.string = code
+        #endif
+        copied = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { copied = false }
     }
 }
