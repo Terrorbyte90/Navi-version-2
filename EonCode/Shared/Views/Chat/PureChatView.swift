@@ -156,11 +156,8 @@ struct PureChatView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Model picker bar — only shown on macOS (on iOS it's in the top nav bar)
-            #if os(macOS)
-            modelPickerBar
-            Divider().opacity(0.15)
-            #endif
+            // Model picker bar — macOS only; iOS uses the top nav bar in ContentView
+            macModelBar
 
             if let conv = conversation {
                 ScrollViewReader { proxy in
@@ -207,7 +204,17 @@ struct PureChatView: View {
         }
     }
 
-    // MARK: - Model picker bar (ChatGPT-style topbar)
+    // MARK: - macOS-only model bar
+
+    @ViewBuilder
+    var macModelBar: some View {
+        #if os(macOS)
+        modelPickerBar
+        Divider().opacity(0.15)
+        #endif
+    }
+
+    // MARK: - Model picker bar (macOS)
 
     var modelPickerBar: some View {
         HStack(spacing: 12) {
