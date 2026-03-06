@@ -195,8 +195,10 @@ struct PureChatView: View {
         #endif
     }
 
+    // macOS top bar — Mockup11 / ChatGPT-style
     var modelPickerBar: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 8) {
+            // "EonCode  ModelName ⌄"
             if let conv = conversation {
                 Menu {
                     ForEach(ClaudeModel.allCases) { model in
@@ -214,41 +216,44 @@ struct PureChatView: View {
                     }
                 } label: {
                     HStack(spacing: 5) {
+                        Text("EonCode")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(Color(red:0.925,green:0.925,blue:0.925))
                         Text(conv.model.displayName)
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundColor(.primary)
+                            .font(.system(size: 14))
+                            .foregroundColor(Color(red:0.68,green:0.68,blue:0.68))
                         Image(systemName: "chevron.down")
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundColor(.secondary)
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(Color(red:0.5,green:0.5,blue:0.5))
                     }
+                    .padding(.horizontal, 4)
                 }
                 .buttonStyle(.plain)
             } else {
-                Text("Chatt")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(.primary)
+                HStack(spacing: 5) {
+                    Text("EonCode")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(Color(red:0.925,green:0.925,blue:0.925))
+                    Text("Chatt")
+                        .font(.system(size: 14))
+                        .foregroundColor(Color(red:0.68,green:0.68,blue:0.68))
+                }
             }
 
             Spacer()
 
-            HStack(spacing: 10) {
-                if costTracker.lastRequestSEK > 0 {
-                    Text(costTracker.formattedLast().components(separatedBy: " (").first ?? "")
-                        .font(.system(size: 12, design: .monospaced))
-                        .foregroundColor(.secondary.opacity(0.4))
-                }
-                if costTracker.sessionSEK > 0 {
-                    Text(costTracker.formattedSession().components(separatedBy: " (").first ?? "")
-                        .font(.system(size: 12, design: .monospaced))
-                        .foregroundColor(.secondary.opacity(0.3))
-                }
+            // Cost + new chat
+            if costTracker.sessionSEK > 0 {
+                Text(costTracker.formattedSession().components(separatedBy: " (").first ?? "")
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundColor(Color(red:0.5,green:0.5,blue:0.5))
             }
 
             Button { _ = manager.newConversation() } label: {
                 Image(systemName: "square.and.pencil")
-                    .font(.system(size: 15))
-                    .foregroundColor(.secondary)
-                    .frame(width: 30, height: 30)
+                    .font(.system(size: 14))
+                    .foregroundColor(Color(red:0.68,green:0.68,blue:0.68))
+                    .frame(width: 28, height: 28)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -261,34 +266,26 @@ struct PureChatView: View {
     var chatEmptyState: some View {
         VStack(spacing: 28) {
             Spacer()
-            VStack(spacing: 16) {
+            VStack(spacing: 14) {
+                // ChatGPT-green sparkle avatar — larger for empty state
                 ZStack {
                     Circle()
                         .fill(
-                            RadialGradient(
-                                colors: [Color.accentEon.opacity(0.15), Color.accentEon.opacity(0.03)],
-                                center: .center,
-                                startRadius: 0,
-                                endRadius: 44
-                            )
-                        )
-                        .frame(width: 72, height: 72)
-                    Image(systemName: "sparkle")
-                        .font(.system(size: 30, weight: .medium))
-                        .foregroundStyle(
                             LinearGradient(
-                                colors: [.accentEon, .accentEon.opacity(0.7)],
+                                colors: [Color(red:0.455,green:0.667,blue:0.612), Color(red:0.3,green:0.55,blue:0.5)],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             )
                         )
+                        .frame(width: 56, height: 56)
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 24, weight: .semibold))
+                        .foregroundColor(.white)
                 }
-                VStack(spacing: 6) {
-                    Text("EonCode")
-                        .font(.system(size: 28, weight: .bold, design: .rounded))
+                VStack(spacing: 5) {
                     Text("Hur kan jag hjälpa dig?")
-                        .font(.system(size: 16))
-                        .foregroundColor(.secondary.opacity(0.7))
+                        .font(.system(size: 22, weight: .semibold))
+                        .foregroundColor(Color(red:0.925,green:0.925,blue:0.925))
                 }
             }
             Spacer()
@@ -296,10 +293,11 @@ struct PureChatView: View {
         .padding(40)
     }
 
-    // MARK: - Input bar (ChatGPT style pill)
+    // MARK: - Input bar (Mockup11 / ChatGPT-faithful pill)
 
     var chatInputBar: some View {
-        VStack(spacing: 0) {
+        VStack(spacing: 6) {
+            // Image previews
             if !selectedImages.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
@@ -308,99 +306,108 @@ struct PureChatView: View {
                                 #if os(iOS)
                                 if let ui = UIImage(data: data) {
                                     Image(uiImage: ui).resizable().scaledToFill()
-                                        .frame(width: 56, height: 56)
+                                        .frame(width: 52, height: 52)
                                         .clipShape(RoundedRectangle(cornerRadius: 8))
                                 }
                                 #else
                                 if let ns = NSImage(data: data) {
                                     Image(nsImage: ns).resizable().scaledToFill()
-                                        .frame(width: 56, height: 56)
+                                        .frame(width: 52, height: 52)
                                         .clipShape(RoundedRectangle(cornerRadius: 8))
                                 }
                                 #endif
                                 Button { selectedImages.remove(at: idx) } label: {
                                     Image(systemName: "xmark.circle.fill")
-                                        .font(.system(size: 16))
                                         .foregroundColor(.white)
-                                        .background(Circle().fill(Color.black.opacity(0.6)))
+                                        .background(Circle().fill(Color.black.opacity(0.5)))
                                 }
                                 .buttonStyle(.plain)
                                 .offset(x: 4, y: -4)
                             }
                         }
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 8)
+                    .padding(.horizontal, 14)
+                    .padding(.top, 6)
                 }
             }
 
-            HStack(alignment: .bottom, spacing: 0) {
+            // Pill — exact ChatGPT shape
+            HStack(alignment: .bottom, spacing: 8) {
+                // Plus / attach
                 Button { isShowingImagePicker = true } label: {
-                    Image(systemName: "paperclip")
-                        .font(.system(size: 16))
-                        .foregroundColor(.secondary)
-                        .frame(width: 32, height: 32)
-                        .contentShape(Circle())
+                    Image(systemName: "plus")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(Color(red:0.68,green:0.68,blue:0.68))
+                        .frame(width: 30, height: 30)
+                        .background(Color(red:0.16,green:0.16,blue:0.16), in: Circle())
                 }
                 .buttonStyle(.plain)
 
-                TextField("Meddelande", text: $inputText, axis: .vertical)
-                    .font(.system(size: 15))
-                    .lineLimit(1...8)
+                // Text field
+                TextField("Skicka ett meddelande till EonCode", text: $inputText, axis: .vertical)
+                    .font(.callout)
+                    .foregroundColor(Color(red:0.925,green:0.925,blue:0.925))
+                    .lineLimit(1...6)
                     .textFieldStyle(.plain)
-                    .padding(.vertical, 8)
+                    .padding(.vertical, 10)
+                    .padding(.leading, 4)
 
+                // Send / stop — white circle
                 Button(action: sendMessage) {
                     if manager.isStreaming {
-                        Image(systemName: "stop.fill")
-                            .font(.system(size: 16))
-                            .foregroundColor(.primary)
-                            .frame(width: 30, height: 30)
+                        ZStack {
+                            Circle()
+                                .fill(Color(red:0.925,green:0.925,blue:0.925))
+                                .frame(width: 30, height: 30)
+                            RoundedRectangle(cornerRadius: 3)
+                                .fill(Color(red:0.13,green:0.13,blue:0.13))
+                                .frame(width: 10, height: 10)
+                        }
                     } else {
-                        Image(systemName: "arrow.up")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(inputText.isBlank && selectedImages.isEmpty ? .secondary.opacity(0.3) : .black)
-                            .frame(width: 30, height: 30)
-                            .background(
-                                Circle()
-                                    .fill(inputText.isBlank && selectedImages.isEmpty ? Color.clear : Color.white)
-                            )
+                        ZStack {
+                            Circle()
+                                .fill(inputText.isBlank && selectedImages.isEmpty
+                                      ? Color(red:0.28,green:0.28,blue:0.28)
+                                      : Color(red:0.925,green:0.925,blue:0.925))
+                                .frame(width: 30, height: 30)
+                            Image(systemName: "arrow.up")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundColor(inputText.isBlank && selectedImages.isEmpty
+                                                 ? Color(red:0.5,green:0.5,blue:0.5)
+                                                 : Color(red:0.13,green:0.13,blue:0.13))
+                        }
                     }
                 }
                 .buttonStyle(.plain)
                 .disabled(inputText.isBlank && selectedImages.isEmpty && !manager.isStreaming)
+                .padding(.bottom, 5)
             }
-            .padding(.horizontal, 8)
+            .padding(.horizontal, 14)
             .padding(.vertical, 4)
             .background(
-                RoundedRectangle(cornerRadius: 24)
-                    .fill(Color.inputBackground)
+                RoundedRectangle(cornerRadius: 22)
+                    .fill(Color(red:0.185,green:0.185,blue:0.185))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 24)
-                            .strokeBorder(Color.inputBorder, lineWidth: 1)
+                        RoundedRectangle(cornerRadius: 22)
+                            .strokeBorder(Color(red:0.25,green:0.25,blue:0.25), lineWidth: 0.5)
                     )
             )
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
 
-            if costTracker.lastRequestSEK > 0 || costTracker.sessionSEK > 0 {
-                HStack(spacing: 10) {
-                    if costTracker.lastRequestSEK > 0 {
-                        Text(costTracker.formattedLast().components(separatedBy: " (").first ?? "")
-                            .font(.system(size: 12, design: .monospaced))
-                            .foregroundColor(.secondary.opacity(0.4))
-                    }
-                    if costTracker.sessionSEK > 0 {
-                        Text(costTracker.formattedSession().components(separatedBy: " (").first ?? "")
-                            .font(.system(size: 12, design: .monospaced))
-                            .foregroundColor(.secondary.opacity(0.3))
-                    }
-                    Spacer()
+            // Disclaimer + session cost
+            HStack {
+                Text("EonCode kan göra misstag. Kontrollera viktig information.")
+                    .font(.caption2)
+                    .foregroundColor(Color(red:0.5,green:0.5,blue:0.5))
+                Spacer()
+                if costTracker.sessionSEK > 0 {
+                    Text(costTracker.formattedSession().components(separatedBy: " (").first ?? "")
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundColor(Color(red:0.5,green:0.5,blue:0.5).opacity(0.6))
                 }
-                .padding(.horizontal, 20)
-                .padding(.bottom, 6)
             }
         }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
     }
 
     // MARK: - Send
@@ -445,7 +452,7 @@ struct PureChatView: View {
     }
 }
 
-// MARK: - Chat bubble (ChatGPT style)
+// MARK: - Chat bubble (Mockup11 / ChatGPT-faithful)
 
 struct PureChatBubble: View {
     let message: PureChatMessage
@@ -453,43 +460,56 @@ struct PureChatBubble: View {
 
     var isUser: Bool { message.role == .user }
 
+    // ChatGPT exact palette
+    private let userBubbleColor = Color(red: 0.185, green: 0.185, blue: 0.185)
+    private let textPrimary = Color(red: 0.925, green: 0.925, blue: 0.925)
+    private let textMuted = Color(red: 0.5, green: 0.5, blue: 0.5)
+
     var body: some View {
         if isUser {
-            HStack {
-                Spacer(minLength: 60)
-                VStack(alignment: .trailing, spacing: 4) {
+            // Right-aligned pill — no avatar
+            HStack(alignment: .top) {
+                Spacer(minLength: 80)
+                VStack(alignment: .trailing, spacing: 6) {
                     if let imgs = message.imageData, !imgs.isEmpty {
                         imageRow(imgs)
                     }
                     Text(message.content)
-                        .font(.system(size: 15))
+                        .font(.callout)
+                        .foregroundColor(textPrimary)
                         .lineSpacing(3)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 12)
-                        .background(RoundedRectangle(cornerRadius: 20).fill(Color.userBubble))
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                        .background(RoundedRectangle(cornerRadius: 18).fill(userBubbleColor))
                         .textSelection(.enabled)
                 }
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 8)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 6)
         } else {
+            // Left-aligned: sparkle avatar + text, no bubble
             HStack(alignment: .top, spacing: 12) {
                 AssistantAvatar()
                     .padding(.top, 2)
 
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("EonCode")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(.primary)
-
+                VStack(alignment: .leading, spacing: 8) {
                     MarkdownTextView(text: message.content)
                         .textSelection(.enabled)
 
-                    HStack(spacing: 8) {
-                        if let cost = message.costSEK, cost > 0 {
-                            CostBadge(costSEK: cost, usage: message.tokenUsage, model: message.model)
+                    // Action row (ChatGPT-style)
+                    HStack(spacing: 14) {
+                        Button {
+                            #if os(iOS)
+                            UIPasteboard.general.string = message.content
+                            #else
+                            NSPasteboard.general.setString(message.content, forType: .string)
+                            #endif
+                        } label: {
+                            Image(systemName: "doc.on.doc")
+                                .font(.system(size: 12))
                         }
-                        Spacer(minLength: 0)
+                        .buttonStyle(.plain)
+
                         Button {
                             if isSpeaking {
                                 ElevenLabsClient.shared.stop()
@@ -504,15 +524,20 @@ struct PureChatBubble: View {
                         } label: {
                             Image(systemName: isSpeaking ? "stop.circle" : "speaker.wave.2")
                                 .font(.system(size: 12))
-                                .foregroundColor(.secondary.opacity(0.35))
                         }
                         .buttonStyle(.plain)
+
+                        if let cost = message.costSEK, cost > 0 {
+                            CostBadge(costSEK: cost, usage: message.tokenUsage, model: message.model)
+                        }
                     }
+                    .foregroundColor(textMuted)
+                    .padding(.top, 2)
                 }
 
-                Spacer(minLength: 20)
+                Spacer(minLength: 40)
             }
-            .padding(.horizontal, 20)
+            .padding(.horizontal, 16)
             .padding(.vertical, 12)
         }
     }

@@ -50,60 +50,80 @@ struct ChatHistorySidebar: View {
         }
     }
 
-    // MARK: - Top bar
+    // MARK: - Top bar (Mockup11 / ChatGPT-style)
 
     var topBar: some View {
-        HStack(spacing: 10) {
+        VStack(spacing: 0) {
+            // App name row + new item
+            HStack {
+                HStack(spacing: 7) {
+                    ZStack {
+                        Circle()
+                            .fill(LinearGradient(colors: [Color(red:0.455,green:0.667,blue:0.612), Color(red:0.3,green:0.55,blue:0.5)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                            .frame(width: 22, height: 22)
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundColor(.white)
+                    }
+                    Text("EonCode")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(Color(red:0.925,green:0.925,blue:0.925))
+                }
+                Spacer()
+                // New item button — context-aware
+                Button {
+                    switch selectedTab {
+                    case .chat:
+                        _ = chatManager.newConversation()
+                        showSidebar = false
+                    case .plan:
+                        _ = planManager.newPlan()
+                        showSidebar = false
+                    case .project:
+                        if let activeProject = projectStore.activeProject {
+                            let agent = agentPool.agent(for: activeProject)
+                            agent.newConversation()
+                        }
+                        showSidebar = false
+                    default:
+                        break
+                    }
+                } label: {
+                    Image(systemName: newItemIcon)
+                        .font(.system(size: 16))
+                        .foregroundColor(Color(red:0.68,green:0.68,blue:0.68))
+                        .frame(width: 36, height: 36)
+                }
+                .buttonStyle(.plain)
+                .opacity(selectedTab == .chat || selectedTab == .plan || selectedTab == .project ? 1 : 0)
+            }
+            .padding(.horizontal, 14)
+            .padding(.top, topSafeArea + 8)
+            .padding(.bottom, 10)
+
+            // Search bar
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass")
-                    .font(.system(size: 14))
-                    .foregroundColor(.secondary)
+                    .font(.system(size: 13))
+                    .foregroundColor(Color(red:0.5,green:0.5,blue:0.5))
                 TextField("Sök", text: $searchText)
-                    .font(.system(size: 15))
+                    .font(.system(size: 14))
+                    .foregroundColor(Color(red:0.925,green:0.925,blue:0.925))
                 if !searchText.isEmpty {
                     Button { searchText = "" } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(.secondary)
-                            .font(.system(size: 14))
+                            .foregroundColor(Color(red:0.5,green:0.5,blue:0.5))
+                            .font(.system(size: 13))
                     }
                     .buttonStyle(.plain)
                 }
             }
-            .padding(.horizontal, 10)
+            .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background(Color.white.opacity(0.06))
-            .cornerRadius(10)
-
-            // New item button — context-aware
-            Button {
-                switch selectedTab {
-                case .chat:
-                    _ = chatManager.newConversation()
-                    showSidebar = false
-                case .plan:
-                    _ = planManager.newPlan()
-                    showSidebar = false
-                case .project:
-                    if let activeProject = projectStore.activeProject {
-                        let agent = agentPool.agent(for: activeProject)
-                        agent.newConversation()
-                    }
-                    showSidebar = false
-                default:
-                    break
-                }
-            } label: {
-                Image(systemName: newItemIcon)
-                    .font(.system(size: 17))
-                    .foregroundColor(.primary)
-                    .frame(width: 36, height: 36)
-            }
-            .buttonStyle(.plain)
-            .opacity(selectedTab == .chat || selectedTab == .plan || selectedTab == .project ? 1 : 0)
+            .background(Color(red:0.16,green:0.16,blue:0.16), in: RoundedRectangle(cornerRadius: 8))
+            .padding(.horizontal, 10)
+            .padding(.bottom, 8)
         }
-        .padding(.horizontal, 14)
-        .padding(.top, topSafeArea + 8)
-        .padding(.bottom, 10)
     }
 
     private var newItemIcon: String {
@@ -565,30 +585,28 @@ struct ChatHistorySidebar: View {
 
     @ViewBuilder
     private func historyRowContent(title: String, subtitle: String, isActive: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(title)
-                .font(.system(size: 14))
-                .foregroundColor(.primary)
-                .lineLimit(1)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            Text(subtitle)
-                .font(.system(size: 11))
-                .foregroundColor(.secondary)
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .background(isActive ? Color.white.opacity(0.08) : Color.clear)
+        Text(title)
+            .font(.system(size: 14))
+            .foregroundColor(isActive ? Color(red:0.925,green:0.925,blue:0.925) : Color(red:0.68,green:0.68,blue:0.68))
+            .lineLimit(1)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(isActive ? Color(red:0.16,green:0.16,blue:0.16) : Color.clear)
+            )
     }
 
     @ViewBuilder
     private func emptyHistoryHint(icon: String, text: String) -> some View {
         VStack(spacing: 8) {
             Image(systemName: icon)
-                .font(.system(size: 24))
-                .foregroundColor(.secondary.opacity(0.3))
+                .font(.system(size: 22))
+                .foregroundColor(Color(red:0.5,green:0.5,blue:0.5).opacity(0.3))
             Text(text)
-                .font(.system(size: 13))
-                .foregroundColor(.secondary.opacity(0.5))
+                .font(.system(size: 12))
+                .foregroundColor(Color(red:0.5,green:0.5,blue:0.5).opacity(0.5))
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 24)
@@ -598,30 +616,30 @@ struct ChatHistorySidebar: View {
     @ViewBuilder
     private func navItem(icon: String, label: String, isActive: Bool, badge: String? = nil, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            HStack(spacing: 12) {
+            HStack(spacing: 10) {
                 Image(systemName: icon)
-                    .font(.system(size: 16))
-                    .foregroundColor(isActive ? .accentColor : .secondary)
-                    .frame(width: 22)
+                    .font(.system(size: 14))
+                    .foregroundColor(isActive ? Color(red:0.925,green:0.925,blue:0.925) : Color(red:0.68,green:0.68,blue:0.68))
+                    .frame(width: 20)
                 Text(label)
-                    .font(.system(size: 15, weight: isActive ? .semibold : .regular))
-                    .foregroundColor(.primary)
+                    .font(.system(size: 14, weight: isActive ? .semibold : .regular))
+                    .foregroundColor(isActive ? Color(red:0.925,green:0.925,blue:0.925) : Color(red:0.68,green:0.68,blue:0.68))
                 Spacer()
                 if let badge {
                     Text(badge)
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(.secondary)
-                        .padding(.horizontal, 7)
-                        .padding(.vertical, 2)
-                        .background(Color.white.opacity(0.06))
-                        .cornerRadius(10)
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(Color(red:0.5,green:0.5,blue:0.5))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 1)
+                        .background(Color.white.opacity(0.07))
+                        .cornerRadius(8)
                 }
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 9)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
             .background(
                 RoundedRectangle(cornerRadius: 8)
-                    .fill(isActive ? Color.white.opacity(0.08) : Color.clear)
+                    .fill(isActive ? Color(red:0.16,green:0.16,blue:0.16) : Color.clear)
             )
         }
         .buttonStyle(.plain)
@@ -629,38 +647,59 @@ struct ChatHistorySidebar: View {
 
     @ViewBuilder
     private func sectionHeader(_ title: String) -> some View {
-        Text(title)
-            .font(.system(size: 12, weight: .semibold))
-            .foregroundColor(.secondary)
-            .padding(.horizontal, 16)
+        Text(title.uppercased())
+            .font(.system(size: 10, weight: .semibold))
+            .foregroundColor(Color(red:0.5,green:0.5,blue:0.5))
+            .padding(.horizontal, 10)
             .padding(.top, 12)
-            .padding(.bottom, 4)
+            .padding(.bottom, 3)
     }
 
-    // MARK: - Bottom bar
+    // MARK: - Bottom bar (Mockup11 / ChatGPT-style user row)
 
     var bottomBar: some View {
-        HStack(spacing: 12) {
-            HStack(spacing: 5) {
-                Circle()
-                    .fill(statusBroadcaster.remoteMacIsOnline ? Color.green : Color.secondary.opacity(0.4))
-                    .frame(width: 7, height: 7)
-                Text(statusBroadcaster.remoteMacIsOnline ? "Mac ansluten" : "Mac offline")
-                    .font(.system(size: 12))
-                    .foregroundColor(statusBroadcaster.remoteMacIsOnline ? .green : .secondary)
+        VStack(spacing: 0) {
+            Divider().opacity(0.08)
+            HStack(spacing: 10) {
+                // Avatar
+                ZStack {
+                    Circle()
+                        .fill(LinearGradient(colors: [.purple, .blue], startPoint: .topLeading, endPoint: .bottomTrailing))
+                        .frame(width: 28, height: 28)
+                    Text("E")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor(.white)
+                }
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("EonCode")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(Color(red:0.925,green:0.925,blue:0.925))
+                    HStack(spacing: 4) {
+                        Circle()
+                            .fill(statusBroadcaster.remoteMacIsOnline ? Color.green : Color(red:0.5,green:0.5,blue:0.5))
+                            .frame(width: 5, height: 5)
+                        Text(statusBroadcaster.remoteMacIsOnline ? "Mac ansluten" : "Offline")
+                            .font(.system(size: 10))
+                            .foregroundColor(Color(red:0.5,green:0.5,blue:0.5))
+                    }
+                }
+
+                Spacer()
+
+                Button { showSettings = true } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 14))
+                        .foregroundColor(Color(red:0.5,green:0.5,blue:0.5))
+                        .frame(width: 36, height: 36)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
             }
-            Spacer()
-            Button { showSettings = true } label: {
-                Image(systemName: "gearshape")
-                    .font(.system(size: 18))
-                    .foregroundColor(.primary)
-                    .frame(width: 40, height: 40)
-            }
-            .buttonStyle(.plain)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .padding(.bottom, bottomSafeArea)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .padding(.bottom, bottomSafeArea)
     }
 
     // MARK: - Open project from URL

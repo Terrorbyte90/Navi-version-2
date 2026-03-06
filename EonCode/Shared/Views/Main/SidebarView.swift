@@ -61,13 +61,18 @@ struct SidebarView: View {
 
     var sidebarHeader: some View {
         HStack(spacing: 0) {
-            HStack(spacing: 6) {
-                Image(systemName: "sparkle")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(.accentEon)
+            HStack(spacing: 7) {
+                ZStack {
+                    Circle()
+                        .fill(LinearGradient(colors: [Color(red:0.455,green:0.667,blue:0.612), Color(red:0.3,green:0.55,blue:0.5)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                        .frame(width: 22, height: 22)
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(.white)
+                }
                 Text("EonCode")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(.primary.opacity(0.7))
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(Color(red:0.925,green:0.925,blue:0.925))
             }
             .padding(.leading, 14)
 
@@ -84,7 +89,7 @@ struct SidebarView: View {
             } label: {
                 Image(systemName: "square.and.pencil")
                     .font(.system(size: 14))
-                    .foregroundColor(.secondary)
+                    .foregroundColor(Color(red:0.68,green:0.68,blue:0.68))
                     .frame(width: 32, height: 32)
                     .contentShape(Rectangle())
             }
@@ -93,7 +98,7 @@ struct SidebarView: View {
             .opacity(canCreateNew ? 1 : 0)
             .padding(.trailing, 8)
         }
-        .frame(height: 44)
+        .frame(height: 46)
     }
 
     private var canCreateNew: Bool {
@@ -456,38 +461,54 @@ struct SidebarView: View {
 
     var bottomBar: some View {
         VStack(spacing: 0) {
-            // Active agent indicator
+            // Active agent indicator (ChatGPT-style status strip)
             if agentPool.activeCount > 0 {
-                HStack(spacing: 6) {
-                    SpinningGearIcon(size: 10, systemName: "gearshape.2.fill")
-                    Text("\(agentPool.activeCount) agent aktiv")
+                HStack(spacing: 7) {
+                    Circle().fill(Color.orange).frame(width: 7, height: 7)
+                    Text("Agent aktiv — \(agentPool.activeCount) jobb")
                         .font(.system(size: 11))
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Color(red:0.68,green:0.68,blue:0.68))
                     Spacer()
                 }
                 .padding(.horizontal, 14)
-                .padding(.vertical, 6)
-                .background(Color.accentEon.opacity(0.07))
+                .padding(.vertical, 7)
+                .background(Color.white.opacity(0.04))
             }
 
+            Divider().opacity(0.08)
+
+            // User row (ChatGPT-style)
             HStack(spacing: 10) {
-                // Mac connection status
-                HStack(spacing: 5) {
+                // Avatar
+                ZStack {
                     Circle()
-                        .fill(statusBroadcaster.remoteMacIsOnline ? Color.green : Color.secondary.opacity(0.35))
-                        .frame(width: 6, height: 6)
-                    Text(statusBroadcaster.remoteMacIsOnline ? "Synkad" : "Offline")
-                        .font(.system(size: 11))
-                        .foregroundColor(.secondary)
+                        .fill(LinearGradient(colors: [.purple, .blue], startPoint: .topLeading, endPoint: .bottomTrailing))
+                        .frame(width: 28, height: 28)
+                    Text("E")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor(.white)
+                }
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("EonCode")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(Color(red:0.925,green:0.925,blue:0.925))
+                    HStack(spacing: 4) {
+                        Circle()
+                            .fill(statusBroadcaster.remoteMacIsOnline ? Color.green : Color(red:0.5,green:0.5,blue:0.5))
+                            .frame(width: 5, height: 5)
+                        Text(statusBroadcaster.remoteMacIsOnline ? "Mac ansluten" : "Offline")
+                            .font(.system(size: 10))
+                            .foregroundColor(Color(red:0.5,green:0.5,blue:0.5))
+                    }
                 }
 
                 Spacer()
 
-                // Settings
                 Button { showSettings = true } label: {
-                    Image(systemName: "gearshape")
+                    Image(systemName: "ellipsis")
                         .font(.system(size: 13))
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Color(red:0.5,green:0.5,blue:0.5))
                         .frame(width: 28, height: 28)
                         .contentShape(Rectangle())
                 }

@@ -557,48 +557,45 @@ struct CodeBlockView: View {
     }
 }
 
-// MARK: - Streaming bubble (ChatGPT style)
+// MARK: - Streaming bubble (Mockup11 / ChatGPT-faithful)
 
 struct StreamingBubble: View {
     let text: String
     @State private var cursorVisible = true
 
     var body: some View {
-        if text.isEmpty {
-            TypingIndicator()
-        } else {
-            HStack(alignment: .top, spacing: 12) {
-                AssistantAvatar()
-                    .padding(.top, 2)
+        HStack(alignment: .top, spacing: 12) {
+            AssistantAvatar()
+                .padding(.top, 2)
 
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("EonCode")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(.primary)
+            if text.isEmpty {
+                // Three dots while waiting for first token
+                TypingIndicator()
+                    .padding(.top, 4)
+            } else {
+                HStack(alignment: .lastTextBaseline, spacing: 0) {
+                    Text(text.suffix(3000))
+                        .font(.callout)
+                        .foregroundColor(Color(red:0.925,green:0.925,blue:0.925))
+                        .lineSpacing(4)
+                        .textSelection(.enabled)
 
-                    HStack(alignment: .lastTextBaseline, spacing: 0) {
-                        Text(text.suffix(3000))
-                            .font(.system(size: 15))
-                            .foregroundColor(.primary)
-                            .lineSpacing(4)
-                            .textSelection(.enabled)
-
-                        RoundedRectangle(cornerRadius: 1)
-                            .fill(Color.accentEon)
-                            .frame(width: 2, height: 16)
-                            .opacity(cursorVisible ? 1 : 0)
-                            .padding(.leading, 2)
-                    }
+                    // Blinking cursor
+                    RoundedRectangle(cornerRadius: 1)
+                        .fill(Color(red:0.925,green:0.925,blue:0.925).opacity(0.7))
+                        .frame(width: 2, height: 15)
+                        .opacity(cursorVisible ? 1 : 0)
+                        .padding(.leading, 2)
                 }
-
-                Spacer(minLength: 20)
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 12)
-            .onAppear {
-                withAnimation(.easeInOut(duration: 0.5).repeatForever(autoreverses: true)) {
-                    cursorVisible = false
-                }
+
+            Spacer(minLength: 40)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .onAppear {
+            withAnimation(.easeInOut(duration: 0.5).repeatForever(autoreverses: true)) {
+                cursorVisible = false
             }
         }
     }
@@ -610,31 +607,21 @@ struct TypingIndicator: View {
     @State private var animating = false
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            AssistantAvatar()
-                .padding(.top, 2)
-
-            HStack(spacing: 5) {
-                ForEach(0..<3, id: \.self) { i in
-                    Circle()
-                        .fill(Color.secondary.opacity(0.6))
-                        .frame(width: 6, height: 6)
-                        .scaleEffect(animating ? 1.0 : 0.5)
-                        .opacity(animating ? 1.0 : 0.3)
-                        .animation(
-                            .easeInOut(duration: 0.5)
-                                .repeatForever(autoreverses: true)
-                                .delay(Double(i) * 0.18),
-                            value: animating
-                        )
-                }
+        HStack(spacing: 5) {
+            ForEach(0..<3, id: \.self) { i in
+                Circle()
+                    .fill(Color(red:0.68,green:0.68,blue:0.68))
+                    .frame(width: 6, height: 6)
+                    .scaleEffect(animating ? 1.15 : 0.7)
+                    .opacity(animating ? 1.0 : 0.35)
+                    .animation(
+                        .easeInOut(duration: 0.45)
+                            .repeatForever(autoreverses: true)
+                            .delay(Double(i) * 0.16),
+                        value: animating
+                    )
             }
-            .padding(.top, 8)
-
-            Spacer()
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 12)
         .onAppear { animating = true }
     }
 }
@@ -864,20 +851,23 @@ struct InputBar: View {
 struct AssistantAvatar: View {
     var size: CGFloat = 28
 
+    // ChatGPT-green: #74aa9c
+    private let gptGreen = Color(red: 0.455, green: 0.667, blue: 0.612)
+
     var body: some View {
         ZStack {
             Circle()
                 .fill(
                     LinearGradient(
-                        colors: [Color.accentEon.opacity(0.2), Color.accentEon.opacity(0.08)],
+                        colors: [gptGreen, gptGreen.opacity(0.75)],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )
                 )
                 .frame(width: size, height: size)
-            Image(systemName: "sparkle")
-                .font(.system(size: size * 0.46, weight: .medium))
-                .foregroundColor(.accentEon)
+            Image(systemName: "sparkles")
+                .font(.system(size: size * 0.42, weight: .semibold))
+                .foregroundColor(.white)
         }
     }
 }

@@ -154,18 +154,18 @@ struct ContentView: View {
 
     var iOSTopBar: some View {
         HStack(spacing: 0) {
-            // Hamburger
+            // Hamburger — sidebar toggle
             Button { openSidebar() } label: {
-                Image(systemName: "line.3.horizontal")
-                    .font(.system(size: 20, weight: .medium))
-                    .foregroundColor(.primary)
+                Image(systemName: "sidebar.left")
+                    .font(.system(size: 18, weight: .regular))
+                    .foregroundColor(Color(red:0.68,green:0.68,blue:0.68))
                     .frame(width: 44, height: 44)
                     .contentShape(Rectangle())
             }
 
             Spacer()
 
-            // Center title / model picker
+            // Center: "EonCode  ModelName ⌄" — ChatGPT faithful
             iOSCenterTitle
 
             Spacer()
@@ -180,13 +180,13 @@ struct ContentView: View {
         .background(Color.chatBackground)
     }
 
-    // MARK: - Center title (reactive)
+    // MARK: - Center title (reactive, ChatGPT-style)
 
     @ViewBuilder
     var iOSCenterTitle: some View {
         switch selectedTab {
         case .chat:
-            // Model picker — reads from @StateObject so it updates reactively
+            // "EonCode  Haiku 4.5 ⌄" — exact ChatGPT layout
             Menu {
                 ForEach(ClaudeModel.allCases) { model in
                     Button {
@@ -206,42 +206,80 @@ struct ContentView: View {
                 }
             } label: {
                 HStack(spacing: 5) {
+                    Text("EonCode")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(Color(red:0.925,green:0.925,blue:0.925))
                     Text(chatMgr.activeConversation?.model.displayName ?? "Claude")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(.primary)
+                        .font(.system(size: 15))
+                        .foregroundColor(Color(red:0.68,green:0.68,blue:0.68))
                     Image(systemName: "chevron.down")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(.secondary)
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(Color(red:0.5,green:0.5,blue:0.5))
                 }
                 .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
 
         case .project:
-            Text(activeProject?.name ?? "Projekt")
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(.primary)
-                .lineLimit(1)
+            HStack(spacing: 5) {
+                Text("EonCode")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(Color(red:0.925,green:0.925,blue:0.925))
+                Text(activeProject?.name ?? "Projekt")
+                    .font(.system(size: 15))
+                    .foregroundColor(Color(red:0.68,green:0.68,blue:0.68))
+                    .lineLimit(1)
+            }
 
         case .browser:
-            Text("Webb")
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(.primary)
+            HStack(spacing: 5) {
+                Text("EonCode")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(Color(red:0.925,green:0.925,blue:0.925))
+                Text("Webb")
+                    .font(.system(size: 15))
+                    .foregroundColor(Color(red:0.68,green:0.68,blue:0.68))
+            }
 
         case .artifacts:
-            Text("Artefakter")
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(.primary)
+            HStack(spacing: 5) {
+                Text("EonCode")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(Color(red:0.925,green:0.925,blue:0.925))
+                Text("Artefakter")
+                    .font(.system(size: 15))
+                    .foregroundColor(Color(red:0.68,green:0.68,blue:0.68))
+            }
 
         case .plan:
-            Text(planMgr.activePlan?.title ?? "Planera")
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(.primary)
-                .lineLimit(1)
+            Menu {
+                Button("Ny plan") { _ = planMgr.newPlan() }
+            } label: {
+                HStack(spacing: 5) {
+                    Text("EonCode")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(Color(red:0.925,green:0.925,blue:0.925))
+                    Text(planMgr.activePlan?.title ?? "Planera")
+                        .font(.system(size: 15))
+                        .foregroundColor(Color(red:0.68,green:0.68,blue:0.68))
+                        .lineLimit(1)
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(Color(red:0.5,green:0.5,blue:0.5))
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
 
         case .github:
-            Text("GitHub")
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(.primary)
+            HStack(spacing: 5) {
+                Text("EonCode")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(Color(red:0.925,green:0.925,blue:0.925))
+                Text("GitHub")
+                    .font(.system(size: 15))
+                    .foregroundColor(Color(red:0.68,green:0.68,blue:0.68))
+            }
         }
     }
 
@@ -253,30 +291,30 @@ struct ContentView: View {
         case .chat:
             Button { _ = chatMgr.newConversation() } label: {
                 Image(systemName: "square.and.pencil")
-                    .font(.system(size: 18))
-                    .foregroundColor(.primary)
+                    .font(.system(size: 17))
+                    .foregroundColor(Color(red:0.68,green:0.68,blue:0.68))
             }
 
         case .project:
             HStack(spacing: 4) {
                 Circle()
-                    .fill(statusBroadcaster.remoteMacIsOnline ? Color.green : Color.red.opacity(0.6))
-                    .frame(width: 7, height: 7)
+                    .fill(statusBroadcaster.remoteMacIsOnline ? Color.green : Color(red:0.5,green:0.5,blue:0.5))
+                    .frame(width: 6, height: 6)
                 Text(statusBroadcaster.remoteMacIsOnline ? "Mac" : "Offline")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(statusBroadcaster.remoteMacIsOnline ? .green : .secondary)
+                    .font(.system(size: 11))
+                    .foregroundColor(Color(red:0.5,green:0.5,blue:0.5))
             }
 
         case .browser:
             Circle()
-                .fill({ if case .working = browserAgent.status { return Color.green } else { return Color.secondary.opacity(0.3) } }())
-                .frame(width: 8, height: 8)
+                .fill({ if case .working = browserAgent.status { return Color.green } else { return Color(red:0.5,green:0.5,blue:0.5).opacity(0.4) } }())
+                .frame(width: 7, height: 7)
 
         case .plan:
             Button { _ = planMgr.newPlan() } label: {
                 Image(systemName: "square.and.pencil")
-                    .font(.system(size: 18))
-                    .foregroundColor(.primary)
+                    .font(.system(size: 17))
+                    .foregroundColor(Color(red:0.68,green:0.68,blue:0.68))
             }
 
         default:
