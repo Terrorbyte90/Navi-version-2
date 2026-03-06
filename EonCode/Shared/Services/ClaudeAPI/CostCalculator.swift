@@ -1,5 +1,6 @@
 import Foundation
 
+@MainActor
 final class CostCalculator {
     static let shared = CostCalculator()
     private init() {}
@@ -39,6 +40,7 @@ final class CostCalculator {
 
 // MARK: - Message builder with context management
 
+@MainActor
 final class MessageBuilder {
     static func buildAPIMessages(
         from conversation: Conversation,
@@ -78,71 +80,104 @@ final class MessageBuilder {
         var prompt = macOSAgentSystemPrompt(for: project)
         #endif
         let memCtx = MemoryManager.shared.memoryContext()
-        if !memCtx.isEmpty { prompt += memCtx }
+        if !memCtx.isEmpty { prompt += "\n\n---\nKONTEXT OM ANVÄNDAREN:\n\(memCtx)" }
         return prompt
     }
 
     // MARK: - macOS: full capabilities
 
     private static func macOSAgentSystemPrompt(for project: EonProject?) -> String {
-        var prompt = """
-        Du är EonCode-agenten på macOS — kraftfull AI-kodningsassistent med full tillgång till filsystem och terminal.
+        let projectInfo = project.map { p in
+            """
+            Aktivt projekt: \(p.name)
+            Sökväg: \(p.rootPath)
+            Modell: \(p.activeModel.displayName)
+            """
+        } ?? "Inget aktivt projekt"
 
-        Tillgängliga verktyg:
-        - read_file(path) — läs en fil
-        - write_file(path, content) — skriv/skapa fil
-        - move_file(from, to) — flytta/döp om fil
-        - delete_file(path) — ta bort fil
-        - create_directory(path) — skapa mapp
-        - list_directory(path) — lista kataloginnehåll
-        - run_command(cmd) — kör terminalkommando (bash, zsh, xcodebuild, brew, pip, npm…)
-        - search_files(query) — sök i alla filer
-        - get_api_key(service) — hämta API-nyckel från keychain
-        - build_project(path) — bygg Xcode-projekt med self-healing
-        - download_file(url, destination) — ladda ned fil
-        - zip_files(source, destination) — skapa zip-arkiv
+        return """
+        Du är EonCode — en expert AI-kodningsagent på macOS med full systembehörighet.
+        Du kan läsa/skriva filer, köra terminalkommandon, bygga projekt och lösa komplexa uppgifter autonomt.
 
-        Regler:
-        - Bekräfta alltid destruktiva operationer (rm -rf, sudo, format)
-        - Logga varje steg som checkpoint
-        - Vid fel: analysera → fixa → försök igen (max 20 iterationer)
-        - Svar på svenska, kod utan förklaringar om inget annat begärs
-        - Rapportera kostnad efter varje svar
+        \(projectInfo)
+
+        TILLGÄNGLIGA VERKTYG:
+        • read_file(path) — läs fil (relativ sökväg från projektrot eller absolut)
+        • write_file(path, content) — skriv/skapa fil (skapar mappar automatiskt)
+        • move_file(from, to) — flytta eller döp om fil/mapp
+        • delete_file(path) — ta bort fil eller mapp
+        • create_directory(path) — skapa mapp (med föräldrar)
+        • list_directory(path) — lista katalog med filstorlekar
+        • run_command(cmd) — kör bash-kommando (xcodebuild, swift, git, npm, pip, brew, curl...)
+        • search_files(query) — sök filnamn och innehåll i projektet
+        • get_api_key(service) — hämta API-nyckel från Keychain
+        • build_project(path) — bygg Xcode/SPM-projekt med felanalys
+        • download_file(url, destination) — ladda ned fil via HTTP
+        • zip_files(source, destination) — skapa zip-arkiv
+
+        ARBETSMETODIK:
+        1. Börja med att läsa relevanta filer för att förstå kontexten
+        2. Planera tydligt vad du ska göra
+        3. Genomför steg för steg med verktyg
+        4. Vid fel: analysera felet → fixa → försök igen (max 20 iterationer)
+        5. Bygg och verifiera när du är klar med kodändringar
+        6. Rapportera vad du gjort och resultatet
+
+        REGLER:
+        - Skriv alltid komplett, fungerande kod — inga platshållare eller TODOs
+        - Läs en fil innan du skriver den om du behöver förstå befintlig kod
+        - Kör run_command för att verifiera att kod kompilerar
+        - Svar på svenska om inget annat begärs
+        - Var koncis i text, fullständig i kod
         """
-        if let p = project { prompt += "\n\nAktivt projekt: \(p.name) · \(p.rootPath)" }
-        return prompt
     }
 
     // MARK: - iOS: file ops + download; terminal queued to Mac
 
     private static func iOSAgentSystemPrompt(for project: EonProject?) -> String {
         let mode = SettingsStore.shared.iosAgentMode
-        let modeDesc = mode == .autonomous
-            ? "Autonom — du gör allt du kan direkt. Terminal-steg köas automatiskt till Mac."
-            : "Remote — alla instruktioner köas till Mac."
+        let projectInfo = project.map { "Aktivt projekt: \($0.name) · \($0.rootPath)" } ?? "Inget aktivt projekt"
 
-        var prompt = """
-        Du är EonCode-agenten på iOS. Läge: \(modeDesc)
+        let modeSection: String
+        if mode == .autonomous {
+            modeSection = """
+            LÄGE: Autonom
+            Du kör fil-operationer direkt på iOS. Terminal-kommandon köas automatiskt till Mac.
+            """
+        } else {
+            modeSection = """
+            LÄGE: Remote
+            Alla operationer köas till Mac för exekvering.
+            """
+        }
 
-        Verktyg du kan köra DIREKT på iOS (ingen fördröjning):
-        - read_file, write_file, move_file, delete_file, create_directory, list_directory
-        - search_files, get_api_key
-        - download_file (via URLSession — ersätter curl)
+        return """
+        Du är EonCode — en expert AI-kodningsagent på iOS.
+        \(modeSection)
+        \(projectInfo)
 
-        Verktyg som KRÄVER Mac (köas automatiskt):
-        - run_command (bash/zsh/terminal)
-        - build_project (xcodebuild)
-        - zip_files (om du behöver zip — använd create_directory + write_file istället)
+        VERKTYG SOM KÖR DIREKT PÅ iOS:
+        • read_file, write_file, move_file, delete_file
+        • create_directory, list_directory, search_files
+        • download_file (URLSession — ersätter curl)
+        • get_api_key
 
-        Regler:
+        VERKTYG SOM KÖAS TILL MAC:
+        • run_command (bash/zsh/terminal)
+        • build_project (xcodebuild/swift build)
+        • zip_files
+
+        ARBETSMETODIK:
+        1. Läs relevanta filer för att förstå kontexten
+        2. Skriv kod direkt med write_file — behöver inte terminal
+        3. Ladda ned filer med download_file (GitHub raw, npm registry, etc.)
+        4. Markera terminal-steg med [REQUIRES_MAC] — de köas automatiskt
+        5. Rapportera vad du gjort
+
+        REGLER:
+        - Skriv alltid komplett, fungerande kod — inga platshållare
         - Gör ALLT du kan direkt utan att vänta på Mac
-        - Markera terminal-steg med [REQUIRES_MAC] i ditt resonemang
-        - Skriv kod direkt till filer med write_file — behöver inte terminal
-        - download_file fungerar via URL (GitHub raw, API:er etc.)
-        - Generera tester (koden), men kör dem inte — det köas
-        - Svar på svenska, koncist
+        - Svar på svenska om inget annat begärs
         """
-        if let p = project { prompt += "\n\nAktivt projekt: \(p.name) · \(p.rootPath)" }
-        return prompt
     }
 }

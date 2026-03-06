@@ -184,6 +184,8 @@ final class LocalAgentEngine: ObservableObject {
                 return "FEL: \(err.localizedDescription)"
             }
             return "Extraherad till: \(destination)"
+        } catch {
+            return "FEL: \(error.localizedDescription)"
         }
     }
 

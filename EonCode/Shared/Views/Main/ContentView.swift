@@ -1,6 +1,6 @@
 import SwiftUI
 
-enum AppSection: String, Hashable { case project, pureChat, browser }
+enum AppSection: String, Hashable { case project, pureChat, browser, artifacts, planning, github }
 
 struct ContentView: View {
     @StateObject private var projectStore = ProjectStore.shared
@@ -38,39 +38,12 @@ struct ContentView: View {
                 showNewProject: $showNewProject,
                 section: $macSection
             )
-            .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 350)
+            .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 320)
         } detail: {
-            switch macSection {
-            case .pureChat:
-                PureChatView()
-            case .browser:
-                BrowserView()
-            case .project:
-                if let project = activeProject, let agent = activeAgent {
-                    MacMainView(project: project, agent: agent, selectedTab: $selectedTab)
-                } else {
-                    WelcomeView(showNewProject: $showNewProject)
-                }
-            }
+            macDetailView
         }
         .navigationTitle("")
-        .toolbar {
-            ToolbarItemGroup(placement: .navigation) {
-                StatusBarView()
-            }
-            ToolbarItemGroup(placement: .primaryAction) {
-                Button {
-                    showSettings = true
-                } label: {
-                    Image(systemName: "gearshape")
-                }
-                .help("Inställningar")
-            }
-        }
-        .sheet(isPresented: $showSettings) {
-            SettingsView()
-                .frame(width: 560, height: 640)
-        }
+        .toolbar(.hidden, for: .windowToolbar)
         .sheet(isPresented: $showNewProject) {
             NewProjectView()
         }
@@ -78,107 +51,61 @@ struct ContentView: View {
             BackgroundDaemon.shared.start()
         }
     }
+
+    @ViewBuilder
+    var macDetailView: some View {
+        switch macSection {
+        case .pureChat:
+            PureChatView()
+        case .browser:
+            BrowserView()
+        case .artifacts:
+            ArtifactView()
+        case .planning:
+            PlanView()
+        case .github:
+            GitHubView()
+        case .project:
+            if let project = activeProject, let agent = activeAgent {
+                MacMainView(project: project, agent: agent)
+            } else {
+                WelcomeView(showNewProject: $showNewProject)
+            }
+        }
+    }
     #endif
 
     // MARK: - iOS Layout
 
     #if os(iOS)
+    @State private var showSidebar = false
+    @State private var sidebarOffset: CGFloat = -320
+
     var iOSLayout: some View {
-        TabView(selection: $selectedTab) {
-            NavigationView {
-                if let project = activeProject, let agent = activeAgent {
-                    ChatView(agent: agent)
-                        .navigationTitle(project.name)
-                        .navigationBarTitleDisplayMode(.inline)
-                        .toolbar {
-                            ToolbarItem(placement: .navigationBarLeading) {
-                                NavigationLink {
-                                    SidebarView(
-                                        selectedProject: $projectStore.activeProject,
-                                        showNewProject: $showNewProject
-                                    )
-                                } label: {
-                                    Image(systemName: "sidebar.left")
-                                }
-                            }
-                            ToolbarItem(placement: .navigationBarTrailing) {
-                                macStatusBadge
-                            }
-                        }
-                } else {
-                    WelcomeView(showNewProject: $showNewProject)
-                        .navigationTitle("EonCode")
-                }
-            }
-            .tabItem {
-                Label("Chatt", systemImage: "bubble.left.and.bubble.right")
-            }
-            .tag(AppTab.chat)
+        ZStack(alignment: .topLeading) {
+            // MARK: Main content (full screen, no nav bar, no tab bar)
+            iOSMainContent
+                .ignoresSafeArea(edges: .top)
 
-            NavigationView {
-                if let project = activeProject {
-                    FileTreeAndEditorView(project: project)
-                        .navigationTitle(project.name)
-                } else {
-                    WelcomeView(showNewProject: $showNewProject)
-                }
-            }
-            .tabItem {
-                Label("Editor", systemImage: "chevron.left.forwardslash.chevron.right")
-            }
-            .tag(AppTab.editor)
+            // MARK: Sidebar overlay
+            if showSidebar {
+                Color.black.opacity(0.45)
+                    .ignoresSafeArea()
+                    .onTapGesture { closeSidebar() }
+                    .transition(.opacity)
+                    .zIndex(10)
 
-            NavigationView {
-                MultiProjectDashboard()
-                    .navigationTitle("Agenter")
+                ChatHistorySidebar(
+                    showSidebar: $showSidebar,
+                    showNewProject: $showNewProject,
+                    selectedTab: $selectedTab
+                )
+                .frame(width: 300)
+                .transition(.move(edge: .leading))
+                .zIndex(11)
             }
-            .tabItem {
-                Label("Agenter", systemImage: "gearshape.2")
-            }
-            .tag(AppTab.agents)
-            .badge(agentPool.activeCount > 0 ? "\(agentPool.activeCount)" : nil)
-
-            // Pure chat tab
-            NavigationView {
-                PureChatView()
-                    .navigationTitle("Chatt")
-                    .navigationBarTitleDisplayMode(.inline)
-                    .toolbar {
-                        ToolbarItem(placement: .navigationBarTrailing) {
-                            Button {
-                                _ = ChatManager.shared.newConversation()
-                            } label: {
-                                Image(systemName: "square.and.pencil")
-                                    .foregroundColor(.accentEon)
-                            }
-                        }
-                    }
-            }
-            .tabItem {
-                Label("Chatt", systemImage: "bubble.left.and.bubble.right.fill")
-            }
-            .tag(AppTab.pureChat)
-
-            // Browser tab
-            NavigationView {
-                BrowserView()
-                    .navigationTitle("Webb")
-                    .navigationBarTitleDisplayMode(.inline)
-            }
-            .tabItem {
-                Label("Webb", systemImage: "globe")
-            }
-            .tag(AppTab.browser)
-
-            NavigationView {
-                SettingsView()
-                    .navigationTitle("Inställningar")
-            }
-            .tabItem {
-                Label("Inställningar", systemImage: "gearshape")
-            }
-            .tag(AppTab.settings)
         }
+        .animation(.spring(response: 0.3, dampingFraction: 0.85), value: showSidebar)
         .sheet(isPresented: $showNewProject) {
             NewProjectView()
         }
@@ -188,15 +115,235 @@ struct ContentView: View {
         }
     }
 
-    var macStatusBadge: some View {
+    // MARK: - Main content switcher (no NavigationView, no TabView)
+
+    @ViewBuilder
+    var iOSMainContent: some View {
+        VStack(spacing: 0) {
+            // Custom top bar
+            iOSTopBar
+            Divider().opacity(0.12)
+
+            // Content
+            switch selectedTab {
+            case .chat:
+                PureChatView()
+            case .project:
+                if let project = activeProject, let agent = activeAgent {
+                    ChatView(agent: agent)
+                } else {
+                    iOSWelcome
+                }
+            case .browser:
+                BrowserView()
+            case .artifacts:
+                ArtifactView()
+            case .plan:
+                PlanView()
+            case .github:
+                GitHubView()
+            }
+        }
+        .background(Color.chatBackground)
+    }
+
+    // MARK: - Top bar (ChatGPT-style)
+
+    var iOSTopBar: some View {
+        HStack(spacing: 0) {
+            // Hamburger / sidebar toggle
+            Button {
+                openSidebar()
+            } label: {
+                Image(systemName: "line.3.horizontal")
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundColor(.primary)
+                    .frame(width: 44, height: 44)
+            }
+            .buttonStyle(.plain)
+
+            Spacer()
+
+            // Center: model/tab picker
+            iOSCenterTitle
+
+            Spacer()
+
+            // Right: contextual action
+            iOSTrailingButton
+                .frame(width: 44, height: 44)
+        }
+        .padding(.horizontal, 4)
+        .padding(.top, topSafeArea)
+        .frame(height: 44 + topSafeArea)
+        .background(Color.chatBackground)
+    }
+
+    @ViewBuilder
+    var iOSCenterTitle: some View {
+        switch selectedTab {
+        case .chat:
+            Menu {
+                ForEach(ClaudeModel.allCases) { model in
+                    Button {
+                        if let conv = ChatManager.shared.activeConversation,
+                           let idx = ChatManager.shared.conversations.firstIndex(where: { $0.id == conv.id }) {
+                            ChatManager.shared.conversations[idx].model = model
+                            ChatManager.shared.activeConversation?.model = model
+                        }
+                    } label: {
+                        HStack {
+                            Text(model.displayName)
+                            Text(model.description)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    Text(ChatManager.shared.activeConversation?.model.displayName ?? "Claude")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.primary)
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(.secondary)
+                }
+            }
+            .buttonStyle(.plain)
+
+        case .project:
+            Text(activeProject?.name ?? "Projekt")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundColor(.primary)
+                .lineLimit(1)
+
+        case .browser:
+            Text("Webb")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundColor(.primary)
+
+        case .artifacts:
+            Text("Artefakter")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundColor(.primary)
+
+        case .plan:
+            Text(PlanManager.shared.activePlan?.title ?? "Planera")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundColor(.primary)
+                .lineLimit(1)
+
+        case .github:
+            Text("GitHub")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundColor(.primary)
+        }
+    }
+
+    @ViewBuilder
+    var iOSTrailingButton: some View {
+        switch selectedTab {
+        case .chat:
+            Button {
+                _ = ChatManager.shared.newConversation()
+            } label: {
+                Image(systemName: "square.and.pencil")
+                    .font(.system(size: 17))
+                    .foregroundColor(.primary)
+            }
+            .buttonStyle(.plain)
+
+        case .project:
+            macConnectionBadge
+
+        case .browser:
+            Circle()
+                .fill(BrowserAgent.shared.status == .working ? Color.green : Color.secondary.opacity(0.3))
+                .frame(width: 8, height: 8)
+
+        case .artifacts:
+            EmptyView()
+
+        case .plan:
+            Button {
+                _ = PlanManager.shared.newPlan()
+            } label: {
+                Image(systemName: "square.and.pencil")
+                    .font(.system(size: 17))
+                    .foregroundColor(.primary)
+            }
+            .buttonStyle(.plain)
+
+        case .github:
+            EmptyView()
+        }
+    }
+
+    // MARK: - Welcome (no project selected)
+
+    var iOSWelcome: some View {
+        VStack(spacing: 32) {
+            Spacer()
+            Image(systemName: "sparkles")
+                .font(.system(size: 52))
+                .foregroundColor(.accentEon.opacity(0.7))
+            VStack(spacing: 8) {
+                Text("EonCode")
+                    .font(.system(size: 32, weight: .bold, design: .rounded))
+                Text("Välj ett projekt i sidomenyn")
+                    .font(.system(size: 15))
+                    .foregroundColor(.secondary)
+            }
+            Button {
+                openSidebar()
+            } label: {
+                Label("Öppna sidomenyn", systemImage: "sidebar.left")
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundColor(.accentEon)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 12)
+                    .background(Color.accentEon.opacity(0.12))
+                    .cornerRadius(12)
+            }
+            .buttonStyle(.plain)
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.chatBackground)
+    }
+
+    // MARK: - Mac connection badge
+
+    var macConnectionBadge: some View {
         HStack(spacing: 4) {
             Circle()
-                .fill(statusBroadcaster.remoteMacIsOnline ? Color.green : Color.secondary.opacity(0.4))
+                .fill(statusBroadcaster.remoteMacIsOnline ? Color.green : Color.red.opacity(0.6))
                 .frame(width: 7, height: 7)
-            Text("Mac")
-                .font(.system(size: 12))
-                .foregroundColor(statusBroadcaster.remoteMacIsOnline ? .primary : .secondary)
+            Text(statusBroadcaster.remoteMacIsOnline ? "Mac" : "Offline")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(statusBroadcaster.remoteMacIsOnline ? .green : .secondary)
         }
+    }
+
+    // MARK: - Sidebar helpers
+
+    private func openSidebar() {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+            showSidebar = true
+        }
+    }
+
+    private func closeSidebar() {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+            showSidebar = false
+        }
+    }
+
+    private var topSafeArea: CGFloat {
+        (UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first?.windows.first?.safeAreaInsets.top) ?? 44
     }
     #endif
 }
@@ -204,111 +351,161 @@ struct ContentView: View {
 // MARK: - Tabs
 
 enum AppTab: Int, Hashable {
-    case chat, editor, agents, pureChat, browser, settings
+    case chat, project, browser, artifacts, plan, github
 }
 
 // MARK: - macOS Main View
+
+enum MacEditorTab: Int, Hashable { case editor, agents }
 
 #if os(macOS)
 struct MacMainView: View {
     let project: EonProject
     @ObservedObject var agent: ProjectAgent
-    @Binding var selectedTab: AppTab
 
+    @State private var macEditorTab: MacEditorTab = .editor
     @State private var selectedNode: FileNode?
     @State private var fileContent = ""
-    @State private var showVersions = false
-    @State private var splitFraction: CGFloat = 0.45
 
     var body: some View {
-        HSplitView {
-            // File tree + editor
-            VStack(spacing: 0) {
-                // Tab bar
-                HStack(spacing: 0) {
-                    TabButton(title: "Filer", icon: "folder", tab: .editor, selected: $selectedTab)
-                    TabButton(title: "Versioner", icon: "clock.arrow.circlepath", tab: .agents, selected: $selectedTab)
-                }
-                .padding(.horizontal, 8)
-                .padding(.top, 6)
+        VStack(spacing: 0) {
+            // ── Top bar ─────────────────────────────────────────────────────
+            macProjectTopBar
 
-                Divider().opacity(0.2)
+            Divider().opacity(0.12)
 
-                if selectedTab == .editor {
-                    // Split: file tree on left, editor on right
-                    HSplitView {
-                        FileTreeView(project: project, selectedNode: $selectedNode)
-                            .frame(minWidth: 180, maxWidth: 280)
-
-                        if let node = selectedNode, !node.isDirectory {
-                            CodeEditorView(
-                                content: $fileContent,
-                                fileType: node.fileType,
-                                onSave: { newContent in
-                                    try? newContent.write(toFile: node.path, atomically: true, encoding: .utf8)
-                                }
-                            )
-                            .onAppear {
-                                fileContent = (try? String(contentsOfFile: node.path)) ?? ""
-                            }
-                            .onChange(of: selectedNode?.id) { _ in
-                                if let n = selectedNode, !n.isDirectory {
-                                    fileContent = (try? String(contentsOfFile: n.path)) ?? ""
-                                }
-                            }
-                        } else {
-                            VStack {
-                                Image(systemName: "doc.text")
-                                    .font(.system(size: 48))
-                                    .foregroundColor(.secondary.opacity(0.3))
-                                Text("Välj en fil att redigera")
-                                    .foregroundColor(.secondary)
-                            }
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            // ── Content ──────────────────────────────────────────────────────
+            HSplitView {
+                // Left: file tree + editor / agent status
+                VStack(spacing: 0) {
+                    if macEditorTab == .editor {
+                        HSplitView {
+                            FileTreeView(project: project, selectedNode: $selectedNode)
+                                .frame(minWidth: 160, maxWidth: 260)
+                            editorPane
                         }
+                    } else {
+                        AgentStatusView(agent: agent)
                     }
-                } else if selectedTab == .agents {
-                    AgentStatusView(agent: agent)
+                }
+                .frame(minWidth: 380)
+
+                // Right: chat
+                ChatView(agent: agent)
+                    .frame(minWidth: 300, maxWidth: 480)
+            }
+        }
+        .background(Color.chatBackground)
+    }
+
+    var macProjectTopBar: some View {
+        HStack(spacing: 12) {
+            // Project color dot + name
+            HStack(spacing: 7) {
+                Circle()
+                    .fill(project.color.color)
+                    .frame(width: 9, height: 9)
+                Text(project.name)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.primary)
+            }
+
+            Spacer()
+
+            // Editor / Agent tabs
+            HStack(spacing: 2) {
+                MacTabPill(title: "Filer", icon: "folder", tab: .editor, selected: $macEditorTab)
+                MacTabPill(title: "Agent", icon: "gearshape.2", tab: .agents, selected: $macEditorTab)
+            }
+            .padding(3)
+            .background(Color.white.opacity(0.06))
+            .cornerRadius(9)
+
+            // Running indicator
+            if agent.isRunning {
+                HStack(spacing: 5) {
+                    ProgressView().scaleEffect(0.6)
+                    Text(agent.currentStatus.prefix(30))
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                }
+                .frame(maxWidth: 200)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+    }
+
+    @ViewBuilder
+    var editorPane: some View {
+        if let node = selectedNode, !node.isDirectory {
+            CodeEditorView(
+                content: $fileContent,
+                fileType: node.fileType,
+                onSave: { newContent in
+                    try? newContent.write(toFile: node.path, atomically: true, encoding: .utf8)
+                }
+            )
+            .onAppear { fileContent = (try? String(contentsOfFile: node.path)) ?? "" }
+            .onChange(of: selectedNode?.id) { _ in
+                if let n = selectedNode, !n.isDirectory {
+                    fileContent = (try? String(contentsOfFile: n.path)) ?? ""
                 }
             }
-            .frame(minWidth: 400)
-
-            // Chat panel
-            VStack(spacing: 0) {
-                ChatView(agent: agent)
+        } else {
+            VStack(spacing: 10) {
+                Image(systemName: "doc.text")
+                    .font(.system(size: 40))
+                    .foregroundColor(.secondary.opacity(0.2))
+                Text("Välj en fil att redigera")
+                    .font(.system(size: 13))
+                    .foregroundColor(.secondary.opacity(0.4))
             }
-            .frame(minWidth: 320, maxWidth: 500)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 }
 
-struct TabButton: View {
+struct MacTabPill: View {
     let title: String
     let icon: String
-    let tab: AppTab
-    @Binding var selected: AppTab
+    let tab: MacEditorTab
+    @Binding var selected: MacEditorTab
 
     var isSelected: Bool { selected == tab }
 
     var body: some View {
-        Button {
-            selected = tab
-        } label: {
+        Button { selected = tab } label: {
             HStack(spacing: 4) {
                 Image(systemName: icon)
-                    .font(.system(size: 12))
+                    .font(.system(size: 11))
                 Text(title)
                     .font(.system(size: 12, weight: .medium))
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 5)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 4)
             .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(isSelected ? Color.accentEon.opacity(0.2) : Color.clear)
+                RoundedRectangle(cornerRadius: 7)
+                    .fill(isSelected ? Color.accentEon.opacity(0.25) : Color.clear)
             )
-            .foregroundColor(isSelected ? .accentEon : .secondary)
+            .foregroundColor(isSelected ? .white : .secondary)
         }
         .buttonStyle(.plain)
+    }
+}
+
+// Keep old TabButton for any remaining usages
+struct TabButton: View {
+    let title: String
+    let icon: String
+    let tab: MacEditorTab
+    @Binding var selected: MacEditorTab
+
+    var isSelected: Bool { selected == tab }
+
+    var body: some View {
+        MacTabPill(title: title, icon: icon, tab: tab, selected: $selected)
     }
 }
 #endif
@@ -354,10 +551,11 @@ struct FileTreeAndEditorView: View {
 
 // Adaptive layout: split on iPad, stack on iPhone
 struct HSplitOrStack<Content: View>: View {
+    @Environment(\.horizontalSizeClass) private var sizeClass
     @ViewBuilder let content: () -> Content
 
     var body: some View {
-        if UIDevice.current.userInterfaceIdiom == .pad {
+        if sizeClass == .regular {
             HStack(spacing: 0) { content() }
         } else {
             content()
@@ -521,7 +719,7 @@ struct NewProjectView: View {
 
         #if os(macOS)
         if let url = project.resolvedURL {
-            try? FileSystemAgent.shared.createNewProject(
+            try? await FileSystemAgent.shared.createNewProject(
                 name: name,
                 type: FileSystemAgent.ProjectType(rawValue: projectType) ?? .generic,
                 at: url.deletingLastPathComponent()
@@ -532,4 +730,25 @@ struct NewProjectView: View {
         store.activeProject = project
         dismiss()
     }
+}
+
+// MARK: - Previews
+
+#Preview("WelcomeView – inga projekt") {
+    WelcomeView(showNewProject: .constant(false))
+        .preferredColorScheme(.dark)
+}
+
+#Preview("WelcomeView – med projekt") {
+    let store = ProjectStore.shared
+    let p1 = EonProject(name: "EonCode v2", rootPath: "/tmp/eon", color: .blue)
+    let p2 = EonProject(name: "Lunaflix iOS", rootPath: "/tmp/luna", color: .purple)
+    store.projects = [p1, p2]
+    return WelcomeView(showNewProject: .constant(false))
+        .preferredColorScheme(.dark)
+}
+
+#Preview("NewProjectView") {
+    NewProjectView()
+        .preferredColorScheme(.dark)
 }

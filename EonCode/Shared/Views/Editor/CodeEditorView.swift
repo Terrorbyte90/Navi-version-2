@@ -266,3 +266,53 @@ struct IOSCodeEditor: View {
     }
 }
 #endif
+
+// MARK: - Previews
+
+#Preview("CodeEditorView – Swift") {
+    CodeEditorView(
+        content: .constant("""
+import SwiftUI
+
+struct MyView: View {
+    var body: some View {
+        Text("Hej världen!")
+            .font(.largeTitle)
+            .padding()
+    }
+}
+"""),
+        fileType: .swift
+    )
+    .frame(width: 500, height: 400)
+    .preferredColorScheme(.dark)
+}
+
+#Preview("EditorToolbar") {
+    EditorToolbar(
+        isDirty: true,
+        fileType: .swift,
+        showSearch: .constant(false),
+        onSave: {}
+    )
+    .background(Color.black)
+    .preferredColorScheme(.dark)
+}
+
+#Preview("LineNumberView") {
+    LineNumberView(text: "rad ett\nrad två\nrad tre\nrad fyra\nrad fem")
+        .frame(width: 44, height: 120)
+        .background(Color.black)
+        .preferredColorScheme(.dark)
+}
+
+#Preview("SearchReplaceBar") {
+    SearchReplaceBar(
+        searchQuery: .constant("foo"),
+        replaceQuery: .constant("bar"),
+        onClose: {},
+        onReplace: {}
+    )
+    .background(Color.black)
+    .preferredColorScheme(.dark)
+}

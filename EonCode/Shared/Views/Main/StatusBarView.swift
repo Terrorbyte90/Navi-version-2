@@ -52,10 +52,7 @@ struct StatusBarView: View {
             if let remote = broadcaster.remoteStatus, broadcaster.remoteMacIsOnline {
                 HStack(spacing: 4) {
                     if remote.agentRunning {
-                        Image(systemName: "gearshape.fill")
-                            .font(.system(size: 10))
-                            .foregroundColor(.accentEon)
-                            .symbolEffect(.rotate, options: .repeating)
+                        SpinningGearIcon()
                     }
                     Text(remote.agentStatus.prefix(40))
                         .font(.system(size: 11))
@@ -81,6 +78,15 @@ struct StatusBarView: View {
         return broadcaster.remoteMacIsOnline ? "Mac online" : "Mac offline"
         #endif
     }
+}
+
+// MARK: - Previews
+
+#Preview("StatusBarView") {
+    StatusBarView()
+        .padding()
+        .background(Color.black)
+        .preferredColorScheme(.dark)
 }
 
 // MARK: - Compact model picker (for toolbar)
@@ -116,5 +122,23 @@ struct ModelPickerCompact: View {
             .padding()
             .frame(width: 280)
         }
+    }
+}
+
+struct SpinningGearIcon: View {
+    var size: CGFloat = 10
+    var systemName: String = "gearshape.fill"
+    @State private var angle: Double = 0
+
+    var body: some View {
+        Image(systemName: systemName)
+            .font(.system(size: size))
+            .foregroundColor(.accentEon)
+            .rotationEffect(.degrees(angle))
+            .onAppear {
+                withAnimation(.linear(duration: 1.5).repeatForever(autoreverses: false)) {
+                    angle = 360
+                }
+            }
     }
 }

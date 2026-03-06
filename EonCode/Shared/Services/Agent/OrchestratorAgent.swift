@@ -98,7 +98,8 @@ final class OrchestratorAgent: ObservableObject {
                 let waveResults = await pool.executeTasks(
                     localTasks,
                     projectRoot: projectRoot,
-                    model: model
+                    model: model,
+                    projectID: project.id
                 ) { [weak self] worker in
                     Task { @MainActor in
                         self?.workerStatuses[worker.id] = WorkerStatus(

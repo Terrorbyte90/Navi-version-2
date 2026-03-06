@@ -53,7 +53,7 @@ struct ScreenshotAnalyzer {
         let messages = [ChatMessage(
             role: .user,
             content: [
-                .image(screenshotData, mediaType: "image/jpeg"),
+                .image(screenshotData, mimeType: "image/jpeg"),
                 .text("""
                 Mål: \(goal)
 
@@ -71,7 +71,7 @@ struct ScreenshotAnalyzer {
 
         let (response, _) = try await apiClient.sendMessage(
             messages: messages,
-            model: .sonnet, // Vision needs Sonnet+
+            model: .sonnet45, // Vision needs Sonnet+
             systemPrompt: "Du är en webbläsaragent som analyserar skärmbilder.",
             maxTokens: 512
         )

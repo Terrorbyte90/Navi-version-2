@@ -21,6 +21,8 @@ struct EonProject: Identifiable, Codable, Equatable {
     var tags: [String]
     var isFavorite: Bool
     var color: ProjectColor
+    var githubRepoFullName: String?   // e.g. "owner/repo"
+    var githubBranch: String?         // active branch
 
     init(
         id: UUID = UUID(),

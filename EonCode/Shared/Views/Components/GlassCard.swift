@@ -183,6 +183,44 @@ struct SyntaxHighlighter {
     }
 }
 
+// MARK: - Previews
+
+#Preview("GlassCard") {
+    GlassCard(cornerRadius: 16, padding: 16) {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("EonCode")
+                .font(.system(size: 18, weight: .bold))
+            Text("AI-driven kodningsagent")
+                .font(.system(size: 14))
+                .foregroundColor(.secondary)
+        }
+    }
+    .padding()
+    .background(Color.black)
+    .preferredColorScheme(.dark)
+}
+
+#Preview("GlassButton") {
+    VStack(spacing: 12) {
+        GlassButton("Primär", icon: "plus", isPrimary: true) {}
+        GlassButton("Vanlig", icon: "gearshape") {}
+        GlassButton("Destruktiv", icon: "trash", isDestructive: true) {}
+    }
+    .padding()
+    .background(Color.black)
+    .preferredColorScheme(.dark)
+}
+
+#Preview("GlassTextField") {
+    VStack(spacing: 12) {
+        GlassTextField(placeholder: "Projektnamn", text: .constant(""))
+        GlassTextField(placeholder: "sk-ant-…", text: .constant("sk-ant-abc123"), isSecure: false)
+    }
+    .padding()
+    .background(Color.black)
+    .preferredColorScheme(.dark)
+}
+
 // MARK: - Large Text View (chunked rendering)
 
 struct LargeTextView: View {

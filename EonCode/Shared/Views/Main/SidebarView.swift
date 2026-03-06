@@ -1,103 +1,241 @@
 import SwiftUI
 
+// MARK: - SidebarView
+// ChatGPT macOS-style sidebar: nav items at top, contextual history list below,
+// new-item + settings at bottom.
+
 struct SidebarView: View {
     @Binding var selectedProject: EonProject?
     @Binding var showNewProject: Bool
     @Binding var section: AppSection
+
     @StateObject private var store = ProjectStore.shared
     @StateObject private var agentPool = AgentPool.shared
     @StateObject private var chatManager = ChatManager.shared
-    @State private var searchText = ""
+    @StateObject private var planManager = PlanManager.shared
+    @StateObject private var artifactStore = ArtifactStore.shared
+    @StateObject private var statusBroadcaster = DeviceStatusBroadcaster.shared
+    @StateObject private var ghManager = GitHubManager.shared
 
-    var filteredProjects: [EonProject] {
-        if searchText.isEmpty { return store.projects }
-        return store.projects.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
-    }
+    @State private var searchText = ""
+    @State private var showSettings = false
 
     var body: some View {
         VStack(spacing: 0) {
-            // Section switcher (macOS only)
-            #if os(macOS)
-            sectionSwitcher
-            Divider().opacity(0.15)
-            #endif
+            // ── Top: app name + new-item button ──────────────────────────────
+            sidebarHeader
 
-            // Search
-            HStack {
-                Image(systemName: "magnifyingglass")
-                    .foregroundColor(.secondary)
-                    .font(.system(size: 12))
-                TextField(section == .pureChat ? "Sök chattar…" : "Sök projekt…", text: $searchText)
-                    .font(.system(size: 13))
-                    .textFieldStyle(.plain)
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 7)
-            .background(Color.white.opacity(0.06))
-            .cornerRadius(8)
-            .padding(.horizontal, 10)
-            .padding(.top, 10)
-            .padding(.bottom, 6)
+            // ── Search ───────────────────────────────────────────────────────
+            searchBar
+                .padding(.horizontal, 10)
+                .padding(.bottom, 6)
 
-            Divider().opacity(0.15)
+            Divider().opacity(0.12)
 
-            // Content based on section
-            if section == .pureChat {
-                chatList
-            } else {
-                projectList
-            }
+            // ── Nav shortcuts ────────────────────────────────────────────────
+            navSection
+                .padding(.top, 4)
 
-            Divider().opacity(0.15)
+            Divider().opacity(0.08)
+                .padding(.vertical, 6)
 
+            // ── Contextual history list ──────────────────────────────────────
+            contextualList
+
+            Spacer(minLength: 0)
+
+            Divider().opacity(0.12)
+
+            // ── Bottom bar ───────────────────────────────────────────────────
             bottomBar
         }
+        .frame(maxHeight: .infinity)
         .background(Color.sidebarBackground)
-    }
-
-    // MARK: - macOS section switcher
-
-    #if os(macOS)
-    var sectionSwitcher: some View {
-        HStack(spacing: 4) {
-            SectionButton(title: "Projekt", icon: "folder", target: .project, section: $section)
-            SectionButton(title: "Chatt", icon: "bubble.left.and.bubble.right", target: .pureChat, section: $section)
-            SectionButton(title: "Webb", icon: "globe", target: .browser, section: $section)
+        .sheet(isPresented: $showSettings) {
+            SettingsView()
+                .frame(width: 560, height: 640)
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 8)
     }
-    #endif
+
+    // MARK: - Header
+
+    var sidebarHeader: some View {
+        HStack(spacing: 0) {
+            Text("EonCode")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(.primary.opacity(0.7))
+                .padding(.leading, 14)
+
+            Spacer()
+
+            // Contextual new-item button
+            Button {
+                switch section {
+                case .pureChat:  _ = chatManager.newConversation()
+                case .planning:  _ = planManager.newPlan()
+                case .project:   showNewProject = true
+                default: break
+                }
+            } label: {
+                Image(systemName: "square.and.pencil")
+                    .font(.system(size: 14))
+                    .foregroundColor(.secondary)
+                    .frame(width: 32, height: 32)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help(newItemTooltip)
+            .opacity(canCreateNew ? 1 : 0)
+            .padding(.trailing, 8)
+        }
+        .frame(height: 44)
+    }
+
+    private var canCreateNew: Bool {
+        section == .pureChat || section == .planning || section == .project
+    }
+
+    private var newItemTooltip: String {
+        switch section {
+        case .pureChat:  return "Ny chatt"
+        case .planning:  return "Ny plan"
+        default:         return "Nytt projekt"
+        }
+    }
+
+    // MARK: - Search bar
+
+    var searchBar: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 11))
+                .foregroundColor(.secondary.opacity(0.6))
+            TextField(searchPlaceholder, text: $searchText)
+                .font(.system(size: 12))
+                .textFieldStyle(.plain)
+            if !searchText.isEmpty {
+                Button { searchText = "" } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary.opacity(0.5))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 9)
+        .padding(.vertical, 6)
+        .background(Color.white.opacity(0.07))
+        .cornerRadius(7)
+    }
+
+    private var searchPlaceholder: String {
+        switch section {
+        case .pureChat:  return "Sök chattar…"
+        case .planning:  return "Sök planer…"
+        case .artifacts: return "Sök artefakter…"
+        case .github:    return "Sök repos…"
+        default:         return "Sök projekt…"
+        }
+    }
+
+    // MARK: - Nav shortcuts (ChatGPT-style)
+
+    var navSection: some View {
+        VStack(alignment: .leading, spacing: 1) {
+            navItem(icon: "bubble.left.and.bubble.right.fill", label: "Chatt",       target: .pureChat)
+            navItem(icon: "folder.fill",                       label: "Projekt",     target: .project)
+            navItem(icon: "chevron.left.forwardslash.chevron.right", label: "GitHub", target: .github,
+                    badge: githubBadge)
+            navItem(icon: "map.fill",                          label: "Planera",     target: .planning)
+            navItem(icon: "globe",                             label: "Webb",        target: .browser)
+            navItem(icon: "tray.2.fill",                       label: "Artefakter",  target: .artifacts,
+                    badge: artifactStore.artifacts.isEmpty ? nil : "\(artifactStore.artifacts.count)")
+        }
+        .padding(.horizontal, 6)
+    }
+
+    private var githubBadge: String? {
+        if case .authorized = GitHubManager.shared.authState {
+            let count = GitHubManager.shared.repos.count
+            return count > 0 ? "\(count)" : nil
+        }
+        return nil
+    }
+
+    @ViewBuilder
+    private func navItem(icon: String, label: String, target: AppSection, badge: String? = nil) -> some View {
+        Button { section = target } label: {
+            HStack(spacing: 9) {
+                Image(systemName: icon)
+                    .font(.system(size: 13))
+                    .foregroundColor(section == target ? .white : .secondary)
+                    .frame(width: 18)
+                Text(label)
+                    .font(.system(size: 13, weight: section == target ? .semibold : .regular))
+                    .foregroundColor(section == target ? .white : .primary)
+                Spacer()
+                if let badge {
+                    Text(badge)
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 1)
+                        .background(Color.white.opacity(0.08))
+                        .cornerRadius(8)
+                }
+            }
+            .padding(.horizontal, 9)
+            .padding(.vertical, 7)
+            .background(
+                RoundedRectangle(cornerRadius: 7)
+                    .fill(section == target ? Color.accentEon.opacity(0.3) : Color.clear)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - Contextual history list
+
+    @ViewBuilder
+    var contextualList: some View {
+        switch section {
+        case .pureChat:            chatList
+        case .planning:            planList
+        case .artifacts:           artifactList
+        case .github:              githubRepoList
+        case .project, .browser:   projectList
+        }
+    }
 
     // MARK: - Project list
 
+    var filteredProjects: [EonProject] {
+        searchText.isEmpty ? store.projects
+            : store.projects.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
+    }
+
     var projectList: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 2) {
-                let favorites = filteredProjects.filter { $0.isFavorite }
-                if !favorites.isEmpty {
-                    SidebarSectionHeader(title: "Favoriter")
-                    ForEach(favorites) { project in
-                        ProjectRow(project: project, selectedProject: $selectedProject)
+            LazyVStack(alignment: .leading, spacing: 1) {
+                let favs = filteredProjects.filter { $0.isFavorite }
+                let rest = filteredProjects.filter { !$0.isFavorite }
+
+                if !favs.isEmpty {
+                    listSectionHeader("Favoriter")
+                    ForEach(favs) { p in
+                        ProjectRow(project: p, selectedProject: $selectedProject)
                             .onTapGesture { section = .project }
                     }
                 }
-
-                let nonFavorites = filteredProjects.filter { !$0.isFavorite }
-                if !nonFavorites.isEmpty {
-                    SidebarSectionHeader(title: favorites.isEmpty ? "Projekt" : "Alla projekt")
-                    ForEach(nonFavorites) { project in
-                        ProjectRow(project: project, selectedProject: $selectedProject)
+                if !rest.isEmpty {
+                    listSectionHeader(favs.isEmpty ? "Projekt" : "Alla projekt")
+                    ForEach(rest) { p in
+                        ProjectRow(project: p, selectedProject: $selectedProject)
                             .onTapGesture { section = .project }
                     }
                 }
-
                 if filteredProjects.isEmpty {
-                    Text(searchText.isEmpty ? "Inga projekt" : "Inga träffar")
-                        .font(.system(size: 12))
-                        .foregroundColor(.secondary)
-                        .padding(.horizontal, 12)
-                        .padding(.top, 20)
+                    emptyHint(icon: "folder", text: searchText.isEmpty ? "Inga projekt" : "Inga träffar")
                 }
             }
             .padding(.bottom, 8)
@@ -106,28 +244,202 @@ struct SidebarView: View {
 
     // MARK: - Chat list
 
+    var filteredChats: [ChatConversation] {
+        searchText.isEmpty ? chatManager.conversations
+            : chatManager.conversations.filter { $0.title.localizedCaseInsensitiveContains(searchText) }
+    }
+
     var chatList: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 2) {
-                let chats = searchText.isEmpty
-                    ? chatManager.conversations
-                    : chatManager.conversations.filter { $0.title.localizedCaseInsensitiveContains(searchText) }
-
-                SidebarSectionHeader(title: "Chattar")
-                ForEach(chats) { conv in
-                    ChatConversationRow(
-                        conversation: conv,
-                        isSelected: chatManager.activeConversation?.id == conv.id,
-                        onSelect: { chatManager.activeConversation = conv }
-                    )
+            LazyVStack(alignment: .leading, spacing: 1) {
+                if !filteredChats.isEmpty {
+                    listSectionHeader("Senaste")
+                    ForEach(filteredChats) { conv in
+                        ChatConversationRow(
+                            conversation: conv,
+                            isSelected: chatManager.activeConversation?.id == conv.id,
+                            onSelect: { chatManager.activeConversation = conv }
+                        )
+                    }
+                } else {
+                    emptyHint(icon: "bubble.left.and.bubble.right",
+                              text: searchText.isEmpty ? "Inga chattar" : "Inga träffar")
                 }
+            }
+            .padding(.bottom, 8)
+        }
+    }
 
-                if chats.isEmpty {
-                    Text(searchText.isEmpty ? "Inga chattar" : "Inga träffar")
-                        .font(.system(size: 12))
-                        .foregroundColor(.secondary)
-                        .padding(.horizontal, 12)
+    // MARK: - Plan list
+
+    var filteredPlans: [ProjectPlan] {
+        searchText.isEmpty ? planManager.plans
+            : planManager.plans.filter { $0.title.localizedCaseInsensitiveContains(searchText) }
+    }
+
+    var planList: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 1) {
+                let active    = filteredPlans.filter { $0.status == .active }
+                let drafts    = filteredPlans.filter { $0.status == .draft }
+                let completed = filteredPlans.filter { $0.status == .completed }
+
+                if !active.isEmpty    { listSectionHeader("Aktiva");   ForEach(active)    { planRow($0) } }
+                if !drafts.isEmpty    { listSectionHeader("Utkast");   ForEach(drafts)    { planRow($0) } }
+                if !completed.isEmpty { listSectionHeader("Klara");    ForEach(completed) { planRow($0) } }
+
+                if filteredPlans.isEmpty {
+                    emptyHint(icon: "map", text: searchText.isEmpty ? "Inga planer" : "Inga träffar")
+                }
+            }
+            .padding(.bottom, 8)
+        }
+    }
+
+    @ViewBuilder
+    private func planRow(_ plan: ProjectPlan) -> some View {
+        let isActive = planManager.activePlan?.id == plan.id
+        Button {
+            planManager.activePlan = plan
+            section = .planning
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: plan.status.icon)
+                    .font(.system(size: 11))
+                    .foregroundColor(isActive ? .accentEon : .secondary.opacity(0.5))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(plan.title)
+                        .font(.system(size: 13, weight: isActive ? .semibold : .regular))
+                        .foregroundColor(isActive ? .white : .primary)
+                        .lineLimit(1)
+                    Text(plan.updatedAt.relativeString)
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary.opacity(0.45))
+                }
+                Spacer()
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(RoundedRectangle(cornerRadius: 7)
+                .fill(isActive ? Color.accentEon.opacity(0.25) : Color.clear))
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 6)
+        .contextMenu {
+            Button { planManager.updateStatus(plan, status: .active) }
+                label: { Label("Markera aktiv", systemImage: "bolt") }
+            Button { planManager.updateStatus(plan, status: .completed) }
+                label: { Label("Markera klar", systemImage: "checkmark.seal") }
+            Button { planManager.updateStatus(plan, status: .archived) }
+                label: { Label("Arkivera", systemImage: "archivebox") }
+            Divider()
+            Button(role: .destructive) { planManager.delete(plan) }
+                label: { Label("Radera", systemImage: "trash") }
+        }
+    }
+
+    // MARK: - Artifact list
+
+    var filteredArtifacts: [Artifact] {
+        searchText.isEmpty ? Array(artifactStore.artifacts.prefix(40))
+            : artifactStore.search(searchText)
+    }
+
+    var artifactList: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 1) {
+                if !filteredArtifacts.isEmpty {
+                    listSectionHeader("Senaste")
+                    ForEach(filteredArtifacts) { artifact in
+                        Button { section = .artifacts } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: artifact.displayIcon)
+                                    .font(.system(size: 12))
+                                    .foregroundColor(artifact.displayColor)
+                                    .frame(width: 16)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(artifact.title)
+                                        .font(.system(size: 13))
+                                        .foregroundColor(.primary)
+                                        .lineLimit(1)
+                                    Text("\(artifact.type.displayName) · \(artifact.sizeDescription)")
+                                        .font(.system(size: 10))
+                                        .foregroundColor(.secondary.opacity(0.45))
+                                }
+                                Spacer()
+                            }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.horizontal, 6)
+                    }
+                } else {
+                    emptyHint(icon: "tray.2", text: searchText.isEmpty ? "Inga artefakter" : "Inga träffar")
+                }
+            }
+            .padding(.bottom, 8)
+        }
+    }
+
+    // MARK: - GitHub repo list (sidebar)
+
+    var filteredGitHubRepos: [GitHubRepo] {
+        let repos = ghManager.repos
+        if searchText.isEmpty { return repos }
+        return repos.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
+    }
+
+    var githubRepoList: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 1) {
+                if case .notAuthorized = ghManager.authState {
+                    emptyHint(icon: "chevron.left.forwardslash.chevron.right",
+                              text: "Anslut GitHub i GitHub-vyn")
+                } else if ghManager.isLoadingRepos {
+                    ProgressView()
+                        .frame(maxWidth: .infinity)
                         .padding(.top, 20)
+                } else if filteredGitHubRepos.isEmpty {
+                    emptyHint(icon: "chevron.left.forwardslash.chevron.right",
+                              text: searchText.isEmpty ? "Inga repos" : "Inga träffar")
+                } else {
+                    listSectionHeader("Repos")
+                    ForEach(filteredGitHubRepos) { repo in
+                        Button {
+                            section = .github
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: repo.isPrivate ? "lock.fill" : "chevron.left.forwardslash.chevron.right")
+                                    .font(.system(size: 11))
+                                    .foregroundColor(.secondary.opacity(0.5))
+                                    .frame(width: 14)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(repo.name)
+                                        .font(.system(size: 13))
+                                        .foregroundColor(.primary)
+                                        .lineLimit(1)
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "arrow.triangle.branch")
+                                            .font(.system(size: 9))
+                                        Text(repo.currentBranch)
+                                            .font(.system(size: 10))
+                                    }
+                                    .foregroundColor(.secondary.opacity(0.5))
+                                }
+                                Spacer()
+                                if let status = ghManager.syncStatus[repo.fullName] {
+                                    Text(status)
+                                        .font(.system(size: 9))
+                                        .foregroundColor(status.contains("✓") ? .green : .secondary.opacity(0.5))
+                                }
+                            }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.horizontal, 6)
+                    }
                 }
             }
             .padding(.bottom, 8)
@@ -138,84 +450,73 @@ struct SidebarView: View {
 
     var bottomBar: some View {
         VStack(spacing: 0) {
-            if agentPool.activeCount > 0 && section == .project {
-                HStack {
-                    Image(systemName: "gearshape.2.fill")
-                        .font(.system(size: 11))
-                        .foregroundColor(.accentEon)
-                        .symbolEffect(.rotate, options: .repeating)
-                    Text("\(agentPool.activeCount) agent(er) aktiv")
+            // Active agent indicator
+            if agentPool.activeCount > 0 {
+                HStack(spacing: 6) {
+                    SpinningGearIcon(size: 10, systemName: "gearshape.2.fill")
+                    Text("\(agentPool.activeCount) agent aktiv")
                         .font(.system(size: 11))
                         .foregroundColor(.secondary)
                     Spacer()
                 }
-                .padding(.horizontal, 12)
+                .padding(.horizontal, 14)
                 .padding(.vertical, 6)
-                .background(Color.accentEon.opacity(0.08))
+                .background(Color.accentEon.opacity(0.07))
             }
 
-            if section == .pureChat {
-                Button {
-                    _ = chatManager.newConversation()
-                } label: {
-                    HStack {
-                        Image(systemName: "plus.circle.fill")
-                            .foregroundColor(.accentEon)
-                        Text("Ny chatt")
-                            .font(.system(size: 13))
-                        Spacer()
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
+            HStack(spacing: 10) {
+                // Mac connection status
+                HStack(spacing: 5) {
+                    Circle()
+                        .fill(statusBroadcaster.remoteMacIsOnline ? Color.green : Color.secondary.opacity(0.35))
+                        .frame(width: 6, height: 6)
+                    Text(statusBroadcaster.remoteMacIsOnline ? "Synkad" : "Offline")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                }
+
+                Spacer()
+
+                // Settings
+                Button { showSettings = true } label: {
+                    Image(systemName: "gearshape")
+                        .font(.system(size: 13))
+                        .foregroundColor(.secondary)
+                        .frame(width: 28, height: 28)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-            } else if section == .project {
-                Button {
-                    showNewProject = true
-                } label: {
-                    HStack {
-                        Image(systemName: "plus.circle.fill")
-                            .foregroundColor(.accentEon)
-                        Text("Nytt projekt")
-                            .font(.system(size: 13))
-                        Spacer()
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                }
-                .buttonStyle(.plain)
+                .help("Inställningar")
             }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
         }
     }
-}
 
-// MARK: - Section button (macOS)
+    // MARK: - Shared helpers
 
-struct SectionButton: View {
-    let title: String
-    let icon: String
-    let target: AppSection
-    @Binding var section: AppSection
+    @ViewBuilder
+    private func listSectionHeader(_ title: String) -> some View {
+        Text(title.uppercased())
+            .font(.system(size: 10, weight: .semibold))
+            .foregroundColor(.secondary.opacity(0.45))
+            .padding(.horizontal, 14)
+            .padding(.top, 10)
+            .padding(.bottom, 2)
+    }
 
-    var isSelected: Bool { section == target }
-
-    var body: some View {
-        Button { section = target } label: {
-            VStack(spacing: 3) {
-                Image(systemName: icon)
-                    .font(.system(size: 13))
-                Text(title)
-                    .font(.system(size: 9, weight: .medium))
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 6)
-            .background(
-                RoundedRectangle(cornerRadius: 7)
-                    .fill(isSelected ? Color.accentEon.opacity(0.2) : Color.clear)
-            )
-            .foregroundColor(isSelected ? .accentEon : .secondary)
+    @ViewBuilder
+    private func emptyHint(icon: String, text: String) -> some View {
+        VStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.system(size: 22))
+                .foregroundColor(.secondary.opacity(0.2))
+            Text(text)
+                .font(.system(size: 12))
+                .foregroundColor(.secondary.opacity(0.35))
         }
-        .buttonStyle(.plain)
+        .frame(maxWidth: .infinity)
+        .padding(.top, 28)
     }
 }
 
@@ -229,34 +530,31 @@ struct ChatConversationRow: View {
     var body: some View {
         Button(action: onSelect) {
             HStack(spacing: 8) {
-                Image(systemName: "bubble.left.fill")
-                    .font(.system(size: 11))
-                    .foregroundColor(isSelected ? .accentEon : .secondary.opacity(0.5))
-
                 VStack(alignment: .leading, spacing: 2) {
                     Text(conversation.title)
                         .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
                         .foregroundColor(isSelected ? .white : .primary)
                         .lineLimit(1)
-                    Text("\(conversation.messages.count) meddelanden")
-                        .font(.system(size: 10))
-                        .foregroundColor(.secondary.opacity(0.5))
+                    HStack(spacing: 4) {
+                        Text(conversation.updatedAt.relativeString)
+                            .font(.system(size: 10))
+                            .foregroundColor(.secondary.opacity(0.45))
+                        if conversation.totalCostSEK > 0 {
+                            Text("·")
+                                .font(.system(size: 10))
+                                .foregroundColor(.secondary.opacity(0.3))
+                            Text(CostCalculator.shared.formatSEK(conversation.totalCostSEK))
+                                .font(.system(size: 10, design: .monospaced))
+                                .foregroundColor(.secondary.opacity(0.4))
+                        }
+                    }
                 }
-
                 Spacer()
-
-                if conversation.totalCostSEK > 0 {
-                    Text(CostCalculator.shared.formatSEK(conversation.totalCostSEK))
-                        .font(.system(size: 9, design: .monospaced))
-                        .foregroundColor(.secondary.opacity(0.4))
-                }
             }
             .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(isSelected ? Color.accentEon.opacity(0.25) : Color.clear)
-            )
+            .padding(.vertical, 7)
+            .background(RoundedRectangle(cornerRadius: 7)
+                .fill(isSelected ? Color.accentEon.opacity(0.25) : Color.clear))
         }
         .buttonStyle(.plain)
         .padding(.horizontal, 6)
@@ -275,12 +573,14 @@ struct SidebarSectionHeader: View {
     var body: some View {
         Text(title.uppercased())
             .font(.system(size: 10, weight: .semibold))
-            .foregroundColor(.secondary.opacity(0.5))
+            .foregroundColor(.secondary.opacity(0.45))
             .padding(.horizontal, 12)
             .padding(.top, 10)
             .padding(.bottom, 2)
     }
 }
+
+// MARK: - ProjectRow
 
 struct ProjectRow: View {
     let project: EonProject
@@ -292,19 +592,16 @@ struct ProjectRow: View {
     private var isRunning: Bool { agent?.isRunning ?? false }
 
     var body: some View {
-        Button {
-            selectedProject = project
-        } label: {
+        Button { selectedProject = project } label: {
             HStack(spacing: 8) {
-                // Color dot + running indicator
                 ZStack {
                     Circle()
-                        .fill(project.color.color.opacity(0.8))
-                        .frame(width: 10, height: 10)
+                        .fill(project.color.color.opacity(0.85))
+                        .frame(width: 9, height: 9)
                     if isRunning {
                         Circle()
-                            .stroke(Color.green, lineWidth: 2)
-                            .frame(width: 14, height: 14)
+                            .stroke(Color.green, lineWidth: 1.5)
+                            .frame(width: 13, height: 13)
                     }
                 }
 
@@ -313,41 +610,33 @@ struct ProjectRow: View {
                         .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
                         .foregroundColor(isSelected ? .white : .primary)
                         .lineLimit(1)
-
                     if isRunning, let status = agent?.currentStatus, !status.isEmpty {
-                        Text(status.prefix(30))
+                        Text(status.prefix(28))
                             .font(.system(size: 10))
                             .foregroundColor(.green.opacity(0.8))
                             .lineLimit(1)
                     } else {
                         Text(project.modifiedAt.relativeString)
                             .font(.system(size: 10))
-                            .foregroundColor(.secondary.opacity(0.5))
+                            .foregroundColor(.secondary.opacity(0.45))
                     }
                 }
 
                 Spacer()
-
-                if isRunning {
-                    ProgressView()
-                        .scaleEffect(0.6)
-                }
+                if isRunning { ProgressView().scaleEffect(0.55) }
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
-            .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(isSelected ? Color.accentEon.opacity(0.25) : Color.clear)
-            )
+            .background(RoundedRectangle(cornerRadius: 7)
+                .fill(isSelected ? Color.accentEon.opacity(0.25) : Color.clear))
         }
         .buttonStyle(.plain)
         .padding(.horizontal, 6)
         .contextMenu {
             Button("Öppna") { selectedProject = project }
             Button(project.isFavorite ? "Ta bort favorit" : "Markera som favorit") {
-                var updated = project
-                updated.isFavorite.toggle()
-                Task { await ProjectStore.shared.save(updated) }
+                var u = project; u.isFavorite.toggle()
+                Task { await ProjectStore.shared.save(u) }
             }
             Divider()
             Button("Ta bort", role: .destructive) {
@@ -355,4 +644,16 @@ struct ProjectRow: View {
             }
         }
     }
+}
+
+// MARK: - Preview
+
+#Preview("SidebarView") {
+    SidebarView(
+        selectedProject: .constant(nil),
+        showNewProject: .constant(false),
+        section: .constant(.pureChat)
+    )
+    .frame(width: 260, height: 700)
+    .preferredColorScheme(.dark)
 }

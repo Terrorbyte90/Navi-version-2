@@ -16,7 +16,7 @@ final class PeerSyncEngine: ObservableObject {
 
     private var browser: NWBrowser?
     private var listener: NWListener?
-    private var connections: [NWConnection] = []
+    var connections: [NWConnection] = []
     private let serviceType = Constants.Sync.bonjourServiceType
     private var cancellables = Set<AnyCancellable>()
 
@@ -25,13 +25,17 @@ final class PeerSyncEngine: ObservableObject {
     // MARK: - Advertise (mac advertises, iOS discovers)
 
     func startAdvertising() {
+        // Always cancel and nil out before creating a new listener
+        listener?.cancel()
+        listener = nil
+
         let parameters = NWParameters.tcp
-        parameters.includePeerToPeerPrivacy = true
+        parameters.includePeerToPeer = true
 
-        guard let listener = try? NWListener(using: parameters) else { return }
-        listener.service = NWListener.Service(name: UIDevice.deviceName, type: serviceType)
+        guard let newListener = try? NWListener(using: parameters) else { return }
+        newListener.service = NWListener.Service(name: UIDevice.deviceName, type: serviceType)
 
-        listener.stateUpdateHandler = { [weak self] state in
+        newListener.stateUpdateHandler = { [weak self] state in
             Task { @MainActor in
                 switch state {
                 case .ready:
@@ -39,17 +43,23 @@ final class PeerSyncEngine: ObservableObject {
                     self?.syncStatus = "Tillgänglig för iOS-synk"
                 case .failed:
                     self?.isAdvertising = false
+                    // Discard failed listener and retry with a fresh one
+                    self?.listener = nil
+                    try? await Task.sleep(nanoseconds: 2_000_000_000)
+                    self?.startAdvertising()
                 default: break
                 }
             }
         }
 
-        listener.newConnectionHandler = { [weak self] connection in
-            self?.handleNewConnection(connection)
+        newListener.newConnectionHandler = { [weak self] connection in
+            Task { @MainActor in
+                self?.handleNewConnection(connection)
+            }
         }
 
-        listener.start(queue: .global(qos: .userInitiated))
-        self.listener = listener
+        newListener.start(queue: .global(qos: .userInitiated))
+        self.listener = newListener
     }
 
     func stopAdvertising() {
@@ -61,8 +71,12 @@ final class PeerSyncEngine: ObservableObject {
     // MARK: - Browse (iOS browses for Mac)
 
     func startBrowsing() {
+        // Cancel existing browser before creating a new one
+        browser?.cancel()
+        browser = nil
+
         let params = NWParameters()
-        params.includePeerToPeerPrivacy = true
+        params.includePeerToPeer = true
 
         let browser = NWBrowser(for: .bonjourWithTXTRecord(type: serviceType, domain: nil), using: params)
 
@@ -81,9 +95,15 @@ final class PeerSyncEngine: ObservableObject {
 
         browser.browseResultsChangedHandler = { [weak self] results, _ in
             Task { @MainActor in
-                self?.discoveredPeers = results.compactMap { result -> PeerDevice? in
+                let peers = results.compactMap { result -> PeerDevice? in
                     guard case .service(let name, _, _, _) = result.endpoint else { return nil }
                     return PeerDevice(name: name, endpoint: result.endpoint, isMac: true)
+                }
+                self?.discoveredPeers = peers
+
+                // Auto-connect to first discovered Mac peer if not already connected
+                if self?.connectedPeer == nil, let first = peers.first {
+                    self?.connect(to: first)
                 }
             }
         }
@@ -102,8 +122,16 @@ final class PeerSyncEngine: ObservableObject {
     // MARK: - Connect to peer
 
     func connect(to peer: PeerDevice) {
+        // Remove any existing failed/cancelled connections first
+        connections.removeAll { conn in
+            conn.state == .cancelled || {
+                if case .failed = conn.state { return true }
+                return false
+            }()
+        }
+
         let params = NWParameters.tcp
-        params.includePeerToPeerPrivacy = true
+        params.includePeerToPeer = true
 
         let connection = NWConnection(to: peer.endpoint, using: params)
 
@@ -116,8 +144,11 @@ final class PeerSyncEngine: ObservableObject {
                 case .failed(let error):
                     self?.connectedPeer = nil
                     self?.syncStatus = "Anslutning misslyckades: \(error.localizedDescription)"
+                    // Remove failed connection from pool
+                    self?.connections.removeAll { $0 === connection }
                 case .cancelled:
                     self?.connectedPeer = nil
+                    self?.connections.removeAll { $0 === connection }
                 default: break
                 }
             }
@@ -148,6 +179,16 @@ final class PeerSyncEngine: ObservableObject {
     }
 
     private func handleNewConnection(_ connection: NWConnection) {
+        // Connections from listener.newConnectionHandler must be started manually
+        connection.stateUpdateHandler = { [weak self] state in
+            Task { @MainActor in
+                if case .failed = state {
+                    self?.connections.removeAll { $0 === connection }
+                } else if case .cancelled = state {
+                    self?.connections.removeAll { $0 === connection }
+                }
+            }
+        }
         connection.start(queue: .global(qos: .userInitiated))
         connections.append(connection)
         receiveLoop(connection: connection)

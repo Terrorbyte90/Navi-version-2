@@ -26,12 +26,12 @@ final class WorkerPool: ObservableObject {
         _ tasks: [WorkerTask],
         projectRoot: URL?,
         model: ClaudeModel,
+        projectID: UUID? = nil,
         onWorkerUpdate: @escaping (WorkerAgent) -> Void
     ) async -> [WorkerResult] {
         totalCount += tasks.count
         var results: [WorkerResult] = []
 
-        // Split into concurrent batches respecting maxConcurrent
         let batches = tasks.chunked(into: maxConcurrent)
 
         for batch in batches {
@@ -39,6 +39,7 @@ final class WorkerPool: ObservableObject {
                 batch,
                 projectRoot: projectRoot,
                 model: model,
+                projectID: projectID,
                 onWorkerUpdate: onWorkerUpdate
             )
             results.append(contentsOf: batchResults)
@@ -53,10 +54,10 @@ final class WorkerPool: ObservableObject {
         _ tasks: [WorkerTask],
         projectRoot: URL?,
         model: ClaudeModel,
+        projectID: UUID? = nil,
         onWorkerUpdate: @escaping (WorkerAgent) -> Void
     ) async -> [WorkerResult] {
-        // Spawn workers
-        let workers = tasks.map { WorkerAgent(task: $0, projectRoot: projectRoot, model: model) }
+        let workers = tasks.map { WorkerAgent(task: $0, projectRoot: projectRoot, model: model, projectID: projectID) }
         for w in workers { activeWorkers.append(w) }
 
         // Run in parallel with TaskGroup
@@ -114,7 +115,7 @@ final class WorkerPool: ObservableObject {
 
 extension Array {
     func chunked(into size: Int) -> [[Element]] {
-        stride(from: 0, to: count, by: max(1, size)).map {
+        stride(from: 0, to: count, by: Swift.max(1, size)).map {
             Array(self[$0..<Swift.min($0 + size, count)])
         }
     }

@@ -208,20 +208,22 @@ struct WorkerStatusRow: View {
     private var statusLabel: String {
         if status.isQueued { return "Köad till Mac" }
         switch status.status {
-        case .pending:  return "Väntar…"
-        case .running:  return status.ranLocally ? "Körs lokalt" : "Väntar på Mac…"
-        case .done:     return "Klar ✓"
-        case .failed:   return "Misslyckades ✗"
+        case .pending:    return "Väntar…"
+        case .running:    return status.ranLocally ? "Körs lokalt" : "Väntar på Mac…"
+        case .completed:  return "Klar ✓"
+        case .failed:     return "Misslyckades ✗"
+        case .skipped:    return "Hoppades över"
         }
     }
 
     private var statusColor: Color {
         if status.isQueued { return .yellow }
         switch status.status {
-        case .pending:  return .secondary
-        case .running:  return status.ranLocally ? .green : .blue
-        case .done:     return .green
-        case .failed:   return .red
+        case .pending:    return .secondary
+        case .running:    return status.ranLocally ? .green : .blue
+        case .completed:  return .green
+        case .failed:     return .red
+        case .skipped:    return .secondary
         }
     }
 }
@@ -286,6 +288,50 @@ struct ProjectStatusCard: View {
     var agentStatusColor: Color {
         agent?.isRunning == true ? .green : .secondary.opacity(0.5)
     }
+}
+
+// MARK: - Previews
+
+#Preview("AgentStatusView – idle") {
+    let project = EonProject(name: "EonCode Preview", rootPath: "/tmp/preview", color: .blue)
+    let agent = ProjectAgent(project: project)
+    return AgentStatusView(agent: agent)
+        .frame(width: 400, height: 500)
+        .preferredColorScheme(.dark)
+}
+
+#Preview("MultiProjectDashboard") {
+    let store = ProjectStore.shared
+    store.projects = [
+        EonProject(name: "EonCode v2", rootPath: "/tmp/eon", color: .blue),
+        EonProject(name: "Lunaflix iOS", rootPath: "/tmp/luna", color: .purple),
+        EonProject(name: "Medo Test", rootPath: "/tmp/medo", color: .green),
+    ]
+    return MultiProjectDashboard()
+        .preferredColorScheme(.dark)
+}
+
+#Preview("ProjectStatusCard") {
+    let project = EonProject(name: "EonCode v2", rootPath: "/tmp/eon", color: .blue)
+    return ProjectStatusCard(project: project, pool: AgentPool.shared)
+        .padding()
+        .background(Color.black)
+        .preferredColorScheme(.dark)
+}
+
+#Preview("WorkerStatusRow") {
+    let status = OrchestratorAgent.WorkerStatus(
+        id: UUID(),
+        taskDescription: "Analyserar Swift-filer i projektet",
+        status: .running,
+        output: "",
+        ranLocally: true,
+        isQueued: false
+    )
+    WorkerStatusRow(status: status)
+        .padding()
+        .background(Color.black)
+        .preferredColorScheme(.dark)
 }
 
 // MARK: - iOS Remote Status View

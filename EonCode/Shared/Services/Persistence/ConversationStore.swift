@@ -101,6 +101,9 @@ final class SettingsStore: ObservableObject {
     @Published var parallelAgentsEnabled: Bool {
         didSet { save("parallelAgentsEnabled", value: parallelAgentsEnabled) }
     }
+    @Published var autoGitHubSync: Bool {
+        didSet { save("autoGitHubSync", value: autoGitHubSync) }
+    }
 
     private let defaults = UserDefaults.standard
 
@@ -115,6 +118,7 @@ final class SettingsStore: ObservableObject {
         iosAgentMode = AgentMode(rawValue: UserDefaults.standard.string(forKey: "iosAgentMode") ?? "") ?? .autonomous
         maxParallelWorkers = UserDefaults.standard.integer(forKey: "maxParallelWorkers").nonZero ?? 4
         parallelAgentsEnabled = UserDefaults.standard.value(forKey: "parallelAgentsEnabled") as? Bool ?? true
+        autoGitHubSync = UserDefaults.standard.value(forKey: "autoGitHubSync") as? Bool ?? false
     }
 
     private func save(_ key: String, value: Any?) {

@@ -63,6 +63,7 @@ final class AgentEngine: ObservableObject {
 
     func setProject(_ project: EonProject) {
         currentProject = project
+        toolExecutor.currentProjectID = project.id
     }
 
     // MARK: - Run agent task
@@ -75,9 +76,15 @@ final class AgentEngine: ObservableObject {
         guard !isRunning else { return }
         isRunning = true
         currentTask = task
+        toolExecutor.currentProjectID = currentProject?.id
+        toolExecutor.currentConversationID = conversation.id
         defer {
             isRunning = false
             currentTask = nil
+            // Auto-push to GitHub after every agent run
+            if let project = currentProject {
+                Task { await self.autoGitHubSync(project: project, onUpdate: onUpdate) }
+            }
         }
 
         var task = task
@@ -86,11 +93,10 @@ final class AgentEngine: ObservableObject {
         statusMessage = "Planerar uppgift…"
 
         // MARK: Route complex tasks to Orchestrator
-        let shouldParallelize = SettingsStore.shared.parallelAgentsEnabled
-            && TaskDecomposer.shouldParallelize(instruction: task.instruction)
+        let shouldParallelize = TaskDecomposer.shouldParallelize(instruction: task.instruction)
 
         if shouldParallelize, let project = currentProject {
-            onUpdate("🌊 Komplex uppgift — startar parallella workers…")
+            onUpdate("🌊 Komplex uppgift — planerar med parallella workers…")
             let result = await OrchestratorAgent.shared.execute(
                 instruction: task.instruction,
                 project: project,
@@ -116,7 +122,9 @@ final class AgentEngine: ObservableObject {
         ))
 
         var iterationCount = 0
-        let maxIterations = 50 // Safety limit
+        let maxIterations = 50
+        var consecutiveErrors = 0
+        let maxConsecutiveErrors = 3
 
         while iterationCount < maxIterations {
             iterationCount += 1
@@ -132,10 +140,12 @@ final class AgentEngine: ObservableObject {
             var inputTokens = 0
             var outputTokens = 0
 
+            statusMessage = "Tänker… (steg \(iterationCount)/\(maxIterations))"
+
             do {
                 try await claude.streamMessage(
                     messages: messages,
-                    model: currentProject?.activeModel ?? .haiku,
+                    model: currentProject?.activeModel ?? .sonnet45,
                     systemPrompt: MessageBuilder.agentSystemPrompt(for: currentProject),
                     tools: agentTools,
                     maxTokens: Constants.Agent.maxTokensLarge,
@@ -158,37 +168,41 @@ final class AgentEngine: ObservableObject {
                         }
                     }
                 )
+                consecutiveErrors = 0
+            } catch let error as ClaudeError {
+                consecutiveErrors += 1
+                let msg = "⚠️ API-fel (försök \(consecutiveErrors)/\(maxConsecutiveErrors)): \(error.localizedDescription)"
+                onUpdate(msg)
+                if consecutiveErrors >= maxConsecutiveErrors {
+                    task.status = .failed
+                    task.error = error.localizedDescription
+                    break
+                }
+                // Exponential backoff
+                try? await Task.sleep(for: .seconds(Double(consecutiveErrors) * 2))
+                continue
             } catch {
-                onUpdate("❌ Fel: \(error.localizedDescription)")
+                onUpdate("❌ Oväntat fel: \(error.localizedDescription)")
                 task.status = .failed
                 task.error = error.localizedDescription
                 break
             }
 
-            // Add assistant message
+            // Build assistant message
             var assistantContent: [MessageContent] = []
-            if !fullText.isEmpty {
-                assistantContent.append(.text(fullText))
-            }
+            if !fullText.isEmpty { assistantContent.append(.text(fullText)) }
             for tool in toolCalls {
                 assistantContent.append(.toolUse(id: tool.id, name: tool.name, input: tool.input))
             }
-
-            let assistantMsg = ChatMessage(
-                role: .assistant,
-                content: assistantContent,
-                model: currentProject?.activeModel
-            )
+            let assistantMsg = ChatMessage(role: .assistant, content: assistantContent, model: currentProject?.activeModel)
             messages.append(assistantMsg)
 
-            if !fullText.isEmpty {
-                onUpdate(fullText)
-            }
+            if !fullText.isEmpty { onUpdate(fullText) }
 
             // Save checkpoint
-            checkpoint.save(taskID: task.id, step: iterationCount, data: ["messages": messages.count])
+            checkpoint.save(taskID: task.id, step: iterationCount, data: ["messages": messages.count, "tools": toolCalls.count])
 
-            // If no tool calls or stop reason is end_turn, we're done
+            // Done if no tool calls
             if toolCalls.isEmpty || stopReason == "end_turn" {
                 task.status = .completed
                 task.completedAt = Date()
@@ -196,7 +210,7 @@ final class AgentEngine: ObservableObject {
             }
 
             // Execute tool calls
-            statusMessage = "Exekverar verktyg…"
+            statusMessage = "Exekverar \(toolCalls.count) verktyg…"
             var toolResults: [MessageContent] = []
 
             for toolCall in toolCalls {
@@ -204,30 +218,28 @@ final class AgentEngine: ObservableObject {
                 let result: String
 
                 #if os(iOS)
-                // On iOS: route through LocalAgentEngine (respects autonomous/remote mode)
                 let action = agentActionFromTool(name: toolCall.name, params: params)
                 let actionResult = await LocalAgentEngine.shared.execute(
                     action: action,
                     projectRoot: currentProject?.resolvedURL
                 )
                 result = actionResult.output
-                let badge = actionResult.isQueued ? "🟡" : "🟢"
-                onUpdate("\(badge) \(toolCall.name): \(result.prefix(200))")
+                let badge = actionResult.isQueued ? "🟡" : "✅"
+                onUpdate("\(badge) \(toolCall.name): \(result.prefix(300))")
                 #else
-                // On macOS: full execution
                 result = await toolExecutor.execute(
                     name: toolCall.name,
                     params: params,
                     projectRoot: currentProject?.resolvedURL
                 )
-                onUpdate("🔧 \(toolCall.name): \(result.prefix(200))")
+                let badge = result.hasPrefix("FEL:") ? "❌" : "✅"
+                onUpdate("\(badge) \(toolCall.name): \(result.prefix(300))")
                 #endif
 
-                toolResults.append(.toolResult(id: toolCall.id, content: result, isError: false))
+                toolResults.append(.toolResult(id: toolCall.id, content: result, isError: result.hasPrefix("FEL:")))
             }
 
-            let toolResultMsg = ChatMessage(role: .user, content: toolResults)
-            messages.append(toolResultMsg)
+            messages.append(ChatMessage(role: .user, content: toolResults))
         }
 
         // Final update
@@ -307,6 +319,37 @@ final class AgentEngine: ObservableObject {
         return dict.mapValues { AnyCodable($0) }
     }
 
+    // MARK: - Auto GitHub sync
+
+    private func autoGitHubSync(project: EonProject, onUpdate: @escaping (String) -> Void) async {
+        let gh = GitHubManager.shared
+
+        // If project already has a linked repo, push changes
+        if let fullName = project.githubRepoFullName,
+           let repo = gh.repos.first(where: { $0.fullName == fullName }) {
+            onUpdate("📤 Pushar ändringar till GitHub…")
+            await gh.autoCommitAndPush(repo: repo, changedFiles: [])
+            onUpdate("✅ GitHub synkad: \(fullName)")
+            return
+        }
+
+        // If GitHub token exists but no repo linked, auto-create repo
+        guard gh.token != nil else { return }
+
+        // Only auto-create if setting is enabled
+        guard SettingsStore.shared.autoGitHubSync else { return }
+
+        onUpdate("🔗 Skapar GitHub-repo för projektet…")
+        if let newRepo = await gh.ensureRepoExists(for: project) {
+            // Link project to new repo
+            var updated = project
+            updated.githubRepoFullName = newRepo.fullName
+            updated.githubBranch = newRepo.defaultBranch
+            await ProjectStore.shared.save(updated)
+            onUpdate("✅ GitHub-repo skapat: \(newRepo.fullName)")
+        }
+    }
+
     // MARK: - Simple chat (non-agent)
 
     func sendChat(
@@ -369,6 +412,7 @@ final class AgentEngine: ObservableObject {
         assistantMsg.costSEK = costSEK
         conversation.addMessage(assistantMsg)
         conversation.updateCost(inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, costSEK: costSEK)
+        CostTracker.shared.record(usage: usage, model: conversation.model)
 
         onComplete(usage)
     }

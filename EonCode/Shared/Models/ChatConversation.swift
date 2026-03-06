@@ -57,7 +57,7 @@ struct PureChatMessage: Codable, Identifiable {
         var parts: [MessageContent] = []
         if let imgs = imageData {
             for data in imgs {
-                parts.append(.image(data, mediaType: "image/jpeg"))
+                parts.append(.image(data, mimeType: "image/jpeg"))
             }
         }
         parts.append(.text(content))

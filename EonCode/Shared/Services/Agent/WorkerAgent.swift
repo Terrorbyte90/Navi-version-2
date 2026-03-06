@@ -17,13 +17,16 @@ final class WorkerAgent: ObservableObject, Identifiable {
     @Published var progress: Double = 0
 
     private let claude = ClaudeAPIClient.shared
-    private let executor = ToolExecutor()
+    private let executor: ToolExecutor
 
-    init(task: WorkerTask, projectRoot: URL?, model: ClaudeModel = .haiku) {
+    init(task: WorkerTask, projectRoot: URL?, model: ClaudeModel = .haiku, projectID: UUID? = nil) {
         self.id = task.id
         self.task = task
         self.projectRoot = projectRoot
         self.model = model
+        let exec = ToolExecutor()
+        exec.currentProjectID = projectID
+        self.executor = exec
     }
 
     // MARK: - Run
@@ -177,24 +180,39 @@ final class WorkerAgent: ObservableObject, Identifiable {
     }
 
     private var workerSystemPrompt: String {
-        let platform = UIDevice.isMac ? "macOS" : "iOS"
+        #if os(macOS)
+        return """
+        Du är en EonCode-worker på macOS med full systembehörighet.
+        Du har ett avgränsat uppdrag och ska genomföra det effektivt och direkt.
 
-        var prompt = """
-        Du är en EonCode-worker på \(platform). Du har ett avgränsat uppdrag och ska genomföra det effektivt.
-        Använd bara de verktyg som behövs. Var koncis.
+        Tillgängliga verktyg: read_file, write_file, move_file, delete_file,
+        create_directory, list_directory, run_command, search_files, get_api_key,
+        build_project, download_file, zip_files
+
+        Regler:
+        - Använd run_command för bash/zsh, xcodebuild, swift, git, npm, pip etc.
+        - Läs filer innan du skriver dem om du behöver förstå kontexten
+        - Rapportera vad du gjort när du är klar
+        - Var koncis — inga onödiga förklaringar
         """
+        #else
+        return """
+        Du är en EonCode-worker på iOS.
+        Du har ett avgränsat uppdrag och ska genomföra det effektivt.
 
-        #if os(iOS)
-        prompt += """
+        Tillgängliga verktyg (kör direkt på iOS):
+        read_file, write_file, move_file, delete_file, create_directory,
+        list_directory, search_files, download_file, get_api_key
 
-        Du kör på iOS. Tillgängliga verktyg:
-        read_file, write_file, move_file, delete_file, create_directory, list_directory, search_files, download_file, get_api_key
+        Terminal-kommandon (run_command, build_project) köas automatiskt till Mac.
+        Markera sådana steg med [REQUIRES_MAC] i din text.
 
-        Du har INTE tillgång till terminal/bash. Markera terminal-steg med [REQUIRES_MAC].
+        Regler:
+        - Skriv kod direkt med write_file — behöver inte terminal
+        - Ladda ned filer med download_file (URLSession, inte curl)
+        - Var koncis — inga onödiga förklaringar
         """
         #endif
-
-        return prompt
     }
 
     private func makeResult(output: String, succeeded: Bool, start: Date) -> WorkerResult {

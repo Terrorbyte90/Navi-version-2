@@ -80,21 +80,43 @@ final class KeychainManager {
         return items.compactMap { $0[kSecAttrAccount as String] as? String }
     }
 
-    // MARK: - Convenience
+    // MARK: - Convenience (iCloud-synced API keys)
+
     var anthropicAPIKey: String? {
-        try? get(key: Constants.Keychain.anthropicKey)
+        // Prefer synced value, fall back to local
+        KeychainSync.getSync(key: Constants.Keychain.anthropicKey)
+            ?? (try? get(key: Constants.Keychain.anthropicKey))
     }
 
     func saveAnthropicKey(_ key: String) throws {
-        try save(key: Constants.Keychain.anthropicKey, value: key)
+        try KeychainSync.saveSync(key: Constants.Keychain.anthropicKey, value: key)
     }
 
     var elevenLabsAPIKey: String? {
-        try? get(key: Constants.Keychain.elevenLabsKey)
+        KeychainSync.getSync(key: Constants.Keychain.elevenLabsKey)
+            ?? (try? get(key: Constants.Keychain.elevenLabsKey))
     }
 
     func saveElevenLabsKey(_ key: String) throws {
-        try save(key: Constants.Keychain.elevenLabsKey, value: key)
+        try KeychainSync.saveSync(key: Constants.Keychain.elevenLabsKey, value: key)
+    }
+
+    var muxAPIKey: String? {
+        KeychainSync.getSync(key: Constants.Keychain.muxKey)
+            ?? (try? get(key: Constants.Keychain.muxKey))
+    }
+
+    func saveMuxKey(_ key: String) throws {
+        try KeychainSync.saveSync(key: Constants.Keychain.muxKey, value: key)
+    }
+
+    var githubToken: String? {
+        KeychainSync.getSync(key: Constants.Keychain.githubKey)
+            ?? (try? get(key: Constants.Keychain.githubKey))
+    }
+
+    func saveGitHubToken(_ token: String) throws {
+        try KeychainSync.saveSync(key: Constants.Keychain.githubKey, value: token)
     }
 
     func getKey(for service: String) -> String? {
@@ -103,6 +125,52 @@ final class KeychainManager {
 
     func saveKey(_ value: String, for service: String) throws {
         try save(key: service, value: value)
+    }
+
+    // MARK: - Custom API keys (user-defined, iCloud-synced)
+
+    private static let customPrefix = "custom_"
+    private static let customIndexKey = "custom_index"
+
+    /// Save a custom key by name. Both the value and the index are iCloud-synced.
+    func saveCustomKey(name: String, value: String) throws {
+        let storageKey = Self.customPrefix + name
+        try KeychainSync.saveSync(key: storageKey, value: value)
+        // Update the index of known custom key names
+        var index = customKeyNames()
+        if !index.contains(name) {
+            index.append(name)
+            let indexValue = index.joined(separator: "\n")
+            try KeychainSync.saveSync(key: Self.customIndexKey, value: indexValue)
+        }
+    }
+
+    /// Retrieve a custom key value by name.
+    func getCustomKey(name: String) -> String? {
+        KeychainSync.getSync(key: Self.customPrefix + name)
+    }
+
+    /// Delete a custom key by name.
+    func deleteCustomKey(name: String) {
+        KeychainSync.deleteSync(key: Self.customPrefix + name)
+        var index = customKeyNames()
+        index.removeAll { $0 == name }
+        let indexValue = index.joined(separator: "\n")
+        try? KeychainSync.saveSync(key: Self.customIndexKey, value: indexValue)
+    }
+
+    /// Returns all custom key names (from the synced index).
+    func customKeyNames() -> [String] {
+        guard let raw = KeychainSync.getSync(key: Self.customIndexKey), !raw.isEmpty else { return [] }
+        return raw.components(separatedBy: "\n").filter { !$0.isEmpty }
+    }
+
+    /// Returns all custom keys as name→value pairs.
+    func allCustomKeys() -> [(name: String, value: String)] {
+        customKeyNames().compactMap { name in
+            guard let value = getCustomKey(name: name) else { return nil }
+            return (name: name, value: value)
+        }
     }
 }
 

@@ -144,3 +144,35 @@ enum MarkdownBlock {
     case divider
     case quote(String)
 }
+
+// MARK: - Previews
+
+#Preview("MarkdownPreview") {
+    MarkdownPreview(markdown: """
+# Välkommen till EonCode
+
+Ett stycke med **fet text** och lite `inline-kod`.
+
+## Funktioner
+
+- Stödjer Swift, Python, JS och fler
+- Parallella AI-workers
+- iCloud-synk i realtid
+
+```swift
+struct HelloView: View {
+    var body: some View {
+        Text("Hej!")
+    }
+}
+```
+
+> "Koda smartare, inte hårdare."
+
+---
+
+Mer text efter avdelare.
+""")
+    .frame(width: 420, height: 600)
+    .preferredColorScheme(.dark)
+}

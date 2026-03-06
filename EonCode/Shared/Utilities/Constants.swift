@@ -22,10 +22,12 @@ enum Constants {
 
     enum Sync {
         static let bonjourServiceType = "_eoncode._tcp"
+        static let httpServiceType = "_eoncode-http._tcp"
         static let localHTTPPort: UInt16 = 52731
         static let statusFileName = "device-status.json"
         static let instructionPollInterval: TimeInterval = 2.0
         static let syncDebounceInterval: TimeInterval = 1.0
+        static let macServerInfoFile = "mac-server.json"
     }
 
     enum Models {
@@ -47,6 +49,8 @@ enum Constants {
         static let service = "com.eoncode.apikeys"
         static let anthropicKey = "anthropic"
         static let elevenLabsKey = "elevenlabs"
+        static let muxKey = "mux"
+        static let githubKey = "github"
         static let accessGroup = "com.eoncode"
     }
 

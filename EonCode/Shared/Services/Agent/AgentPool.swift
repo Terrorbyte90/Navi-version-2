@@ -44,6 +44,9 @@ final class ProjectAgent: ObservableObject, Identifiable {
     private let engine = AgentEngine()
     private var task: Task<Void, Never>?
 
+    // Completion callback — called when current message finishes (used by PromptQueue)
+    private var completionHandler: (() -> Void)?
+
     init(project: EonProject) {
         self.id = project.id
         self.project = project
@@ -51,32 +54,53 @@ final class ProjectAgent: ObservableObject, Identifiable {
         engine.setProject(project)
     }
 
+    /// Send a message. `onComplete` is called when the agent finishes (used by PromptQueue for sequencing).
     func sendMessage(
         _ text: String,
         images: [Data] = [],
-        isAgentMode: Bool = false
+        isAgentMode: Bool = false,
+        onComplete: (() -> Void)? = nil
     ) {
-        guard !isRunning else { return }
+        // If already running, queue the message instead of dropping it
+        guard !isRunning else {
+            // Enqueue via PromptQueue so it runs after current task
+            let queue = PromptQueue.queue(for: project.id)
+            queue.enqueue(text: text, isAgentMode: isAgentMode, iterations: 1)
+            return
+        }
+
+        completionHandler = onComplete
 
         task = Task {
             isRunning = true
             streamingText = ""
-            defer { isRunning = false }
+            defer {
+                isRunning = false
+                let handler = completionHandler
+                completionHandler = nil
+                handler?()
+                // Auto-push to GitHub if project is linked to a repo
+                Task { await self.autoGitHubSync() }
+            }
 
             if isAgentMode {
                 let agentTask = AgentTask(projectID: project.id, instruction: text)
+                var conv = conversation
                 await engine.run(
                     task: agentTask,
-                    conversation: &conversation,
+                    conversation: &conv,
                     onUpdate: { [weak self] update in
                         self?.streamingText = update
+                        self?.currentStatus = update
                     }
                 )
+                conversation = conv
             } else {
+                var conv = conversation
                 await engine.sendChat(
                     userText: text,
                     images: images,
-                    conversation: &conversation,
+                    conversation: &conv,
                     onToken: { [weak self] token in
                         self?.streamingText += token
                     },
@@ -86,12 +110,14 @@ final class ProjectAgent: ObservableObject, Identifiable {
                         self.lastCostSEK = sek
                         self.sessionCostSEK += sek
                         self.streamingText = ""
+                        CostTracker.shared.record(usage: usage, model: self.conversation.model)
                     },
                     onError: { [weak self] error in
                         self?.currentStatus = error.localizedDescription
                         self?.streamingText = ""
                     }
                 )
+                conversation = conv
             }
         }
     }
@@ -100,5 +126,17 @@ final class ProjectAgent: ObservableObject, Identifiable {
         task?.cancel()
         task = nil
         isRunning = false
+        let handler = completionHandler
+        completionHandler = nil
+        handler?()
+    }
+
+    // MARK: - Auto GitHub sync after agent run
+
+    private func autoGitHubSync() async {
+        guard let repoFullName = project.githubRepoFullName,
+              let repo = GitHubManager.shared.repos.first(where: { $0.fullName == repoFullName })
+        else { return }
+        await GitHubManager.shared.autoCommitAndPush(repo: repo, changedFiles: [])
     }
 }

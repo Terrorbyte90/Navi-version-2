@@ -5,64 +5,117 @@ import Foundation
 
 final class TaskDecomposer {
 
+    // MARK: - Decompose with Claude
+
     static func decompose(
         instruction: String,
         projectContext: String = "",
-        model: ClaudeModel = .haiku
+        model: ClaudeModel = .sonnet45
     ) async throws -> [TaskWave] {
         let prompt = buildPrompt(instruction: instruction, projectContext: projectContext)
 
         let (text, _) = try await ClaudeAPIClient.shared.sendMessage(
             messages: [ChatMessage(role: .user, content: [.text(prompt)])],
             model: model,
-            systemPrompt: "Du är en uppgiftsplanerare. Returnera alltid giltig JSON och inget annat.",
-            maxTokens: 3000
+            systemPrompt: """
+            Du är en expert på att planera och parallellisera kodningsuppgifter.
+            Returnera ALLTID giltig JSON och inget annat — inga förklaringar, inga markdown-block.
+            """,
+            maxTokens: 4096
         )
 
-        return parseWaves(from: text)
+        let waves = parseWaves(from: text)
+        return waves.isEmpty ? fallbackWave(instruction: instruction) : waves
     }
 
-    // MARK: - Heuristic: is this task complex enough to parallelize?
+    // MARK: - Heuristic: should this task be parallelized?
 
+    @MainActor
     static func shouldParallelize(instruction: String) -> Bool {
+        guard SettingsStore.shared.parallelAgentsEnabled else { return false }
+
         let lower = instruction.lowercased()
-        let complexKeywords = [
+
+        // Explicit multi-file or multi-component signals
+        let parallelSignals = [
+            // Swedish
             "bygg en app", "skapa hela", "implementera", "refaktorera hela",
+            "skapa ett", "bygg ett", "lägg till", "migrera", "konvertera",
+            "flera filer", "alla filer", "hela projektet", "komplett",
+            "full stack", "frontend och backend", "api och ui",
+            "tester och implementation", "tester för",
+            // English
             "build an app", "create a full", "implement", "refactor all",
-            "flera filer", "multiple files", "full stack", "komplett", "complete"
+            "multiple files", "entire project", "complete", "full stack",
+            "add tests", "write tests", "migrate", "convert all",
         ]
-        return complexKeywords.contains { lower.contains($0) }
+
+        // Single-step signals — don't parallelize these
+        let sequentialSignals = [
+            "fixa", "fix", "ändra", "change", "uppdatera en", "update one",
+            "läs", "read", "visa", "show", "förklara", "explain",
+            "vad är", "what is", "hur fungerar", "how does"
+        ]
+
+        let hasParallelSignal = parallelSignals.contains { lower.contains($0) }
+        let hasSequentialSignal = sequentialSignals.contains { lower.contains($0) }
+
+        // Parallelize if: has parallel signal AND no sequential signal AND instruction is substantial
+        return hasParallelSignal && !hasSequentialSignal && instruction.count > 50
     }
 
     // MARK: - Prompt
 
     private static func buildPrompt(instruction: String, projectContext: String) -> String {
         """
-        Bryt ner denna uppgift i parallelliserbara deluppgifter grupperade i vågor.
+        Bryt ner denna uppgift i parallelliserbara deluppgifter grupperade i sekventiella vågor.
 
-        Uppgift: \(instruction)
-        \(projectContext.isEmpty ? "" : "Projektkontext:\n\(projectContext)")
+        UPPGIFT: \(instruction)
+        \(projectContext.isEmpty ? "" : "\nPROJEKTKONTEXT:\n\(projectContext)\n")
 
-        Regler:
-        - Tasks i samma våg KAN köras parallellt (inga konflikter)
-        - Task som beror på resultat från föregående våg läggs i nästa våg
-        - Max 8 tasks per våg
-        - requires_terminal: true om task behöver bash/xcodebuild/pip/npm
-        - Var konkret — varje task ska vara tydligt avgränsad
+        REGLER FÖR UPPDELNING:
+        - Uppgifter i SAMMA våg kan köras parallellt (inga beroenden mellan dem)
+        - Uppgifter som beror på resultat från föregående våg läggs i NÄSTA våg
+        - Våg 0: Analys/planering (läs befintliga filer, förstå struktur)
+        - Våg 1+: Implementation (skriv kod, skapa filer)
+        - Sista vågen: Integration (bygg, testa, verifiera)
+        - Max 6 uppgifter per våg
+        - requires_terminal: true om uppgiften behöver bash/xcodebuild/npm/pip/git
+        - Varje instruction ska vara konkret och självständig (worker ser bara sin egen uppgift)
 
-        Svara ENBART med giltig JSON i detta format:
+        Svara ENBART med giltig JSON (inga markdown-block, inga förklaringar):
         {
           "waves": [
             {
               "index": 0,
-              "description": "Grundstruktur",
+              "description": "Analys och planering",
               "tasks": [
                 {
-                  "id": "t1",
-                  "description": "Skapa projektmappar",
-                  "instruction": "Skapa mapparna Sources/, Tests/, Resources/",
+                  "id": "t0_1",
+                  "description": "Läs projektstruktur",
+                  "instruction": "Lista och läs de viktigaste filerna i projektet för att förstå arkitekturen",
                   "requires_terminal": false,
                   "depends_on": []
+                }
+              ]
+            },
+            {
+              "index": 1,
+              "description": "Implementation",
+              "tasks": [
+                {
+                  "id": "t1_1",
+                  "description": "Skapa modell",
+                  "instruction": "Skapa filen Models/User.swift med User-struct enligt specifikationen",
+                  "requires_terminal": false,
+                  "depends_on": ["t0_1"]
+                },
+                {
+                  "id": "t1_2",
+                  "description": "Skapa service",
+                  "instruction": "Skapa filen Services/UserService.swift med CRUD-operationer",
+                  "requires_terminal": false,
+                  "depends_on": ["t0_1"]
                 }
               ]
             }
@@ -74,18 +127,24 @@ final class TaskDecomposer {
     // MARK: - Parse JSON response
 
     private static func parseWaves(from text: String) -> [TaskWave] {
-        // Extract JSON block
-        let json: String
-        if let start = text.range(of: "{"), let end = text.range(of: "}", options: .backwards) {
-            json = String(text[start.lowerBound...end.upperBound])
-        } else {
-            return fallbackWave(text: text)
+        // Strip markdown code blocks if present
+        var cleaned = text
+        if cleaned.contains("```json") {
+            cleaned = cleaned.replacingOccurrences(of: "```json", with: "")
+            cleaned = cleaned.replacingOccurrences(of: "```", with: "")
         }
 
-        guard let data = json.data(using: .utf8),
+        // Extract outermost JSON object
+        guard let startIdx = cleaned.firstIndex(of: "{"),
+              let endIdx = cleaned.lastIndex(of: "}") else {
+            return []
+        }
+        let jsonStr = String(cleaned[startIdx...endIdx])
+
+        guard let data = jsonStr.data(using: .utf8),
               let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let wavesJSON = root["waves"] as? [[String: Any]]
-        else { return fallbackWave(text: text) }
+        else { return [] }
 
         return wavesJSON.compactMap { waveDict -> TaskWave? in
             guard let index = waveDict["index"] as? Int,
@@ -99,16 +158,17 @@ final class TaskDecomposer {
                 else { return nil }
 
                 let requiresTerminal = taskDict["requires_terminal"] as? Bool ?? false
-                let dependsOnStrings = taskDict["depends_on"] as? [String] ?? []
 
                 return WorkerTask(
                     description: description,
                     instruction: instruction,
                     requiresTerminal: requiresTerminal,
-                    dependsOn: [],  // Simplified: wave ordering handles dependencies
+                    dependsOn: [],
                     waveIndex: index
                 )
             }
+
+            guard !tasks.isEmpty else { return nil }
 
             return TaskWave(
                 index: index,
@@ -119,11 +179,12 @@ final class TaskDecomposer {
         }
     }
 
-    // If Claude response can't be parsed, run as single sequential task
-    private static func fallbackWave(text: String) -> [TaskWave] {
+    // MARK: - Fallback: run as single sequential task
+
+    private static func fallbackWave(instruction: String) -> [TaskWave] {
         let task = WorkerTask(
             description: "Exekvera uppgift",
-            instruction: text,
+            instruction: instruction,
             requiresTerminal: false,
             dependsOn: [],
             waveIndex: 0

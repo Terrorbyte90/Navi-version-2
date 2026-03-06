@@ -1,0 +1,662 @@
+#if os(iOS)
+import SwiftUI
+import UniformTypeIdentifiers
+
+// MARK: - iOS Sidebar (ChatGPT-style, context-aware history)
+
+struct ChatHistorySidebar: View {
+    @Binding var showSidebar: Bool
+    @Binding var showNewProject: Bool
+    @Binding var selectedTab: AppTab
+
+    @StateObject private var chatManager = ChatManager.shared
+    @StateObject private var planManager = PlanManager.shared
+    @StateObject private var projectStore = ProjectStore.shared
+    @StateObject private var artifactStore = ArtifactStore.shared
+    @StateObject private var statusBroadcaster = DeviceStatusBroadcaster.shared
+    @StateObject private var ghManager = GitHubManager.shared
+
+    @State private var searchText = ""
+    @State private var showSettings = false
+    @State private var showOpenProject = false
+
+    // MARK: - Body
+
+    var body: some View {
+        VStack(spacing: 0) {
+            topBar
+            Divider().opacity(0.1)
+
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 0) {
+                    // Navigation shortcuts
+                    navShortcuts
+
+                    Divider().opacity(0.08).padding(.vertical, 8)
+
+                    // Context-aware history section
+                    contextualHistory
+                }
+                .padding(.bottom, 16)
+            }
+
+            Spacer(minLength: 0)
+            Divider().opacity(0.1)
+            bottomBar
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(UIColor.systemBackground))
+        .sheet(isPresented: $showSettings) { SettingsView() }
+        .sheet(isPresented: $showOpenProject) {
+            iCloudProjectPicker { url in openProjectFromURL(url) }
+        }
+    }
+
+    // MARK: - Top bar
+
+    var topBar: some View {
+        HStack(spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 14))
+                    .foregroundColor(.secondary)
+                TextField("Sök", text: $searchText)
+                    .font(.system(size: 15))
+                if !searchText.isEmpty {
+                    Button { searchText = "" } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(.secondary)
+                            .font(.system(size: 14))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(Color(UIColor.secondarySystemBackground))
+            .cornerRadius(10)
+
+            // New item button — context-aware
+            Button {
+                switch selectedTab {
+                case .chat:
+                    _ = chatManager.newConversation()
+                    showSidebar = false
+                case .plan:
+                    _ = planManager.newPlan()
+                    showSidebar = false
+                default:
+                    break
+                }
+            } label: {
+                Image(systemName: newItemIcon)
+                    .font(.system(size: 17))
+                    .foregroundColor(.primary)
+                    .frame(width: 36, height: 36)
+            }
+            .buttonStyle(.plain)
+            .opacity(selectedTab == .chat || selectedTab == .plan ? 1 : 0)
+        }
+        .padding(.horizontal, 14)
+        .padding(.top, topSafeArea + 8)
+        .padding(.bottom, 10)
+    }
+
+    private var newItemIcon: String {
+        switch selectedTab {
+        case .plan: return "map.badge.plus"
+        default:    return "square.and.pencil"
+        }
+    }
+
+    // MARK: - Nav shortcuts
+
+    var navShortcuts: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            navItem(icon: "bubble.left.and.bubble.right.fill", label: "Chatt", isActive: selectedTab == .chat) {
+                selectedTab = .chat; showSidebar = false
+            }
+            navItem(icon: "folder.fill", label: "Projekt", isActive: selectedTab == .project) {
+                selectedTab = .project; showSidebar = false
+            }
+            navItem(icon: "map.fill", label: "Planera", isActive: selectedTab == .plan) {
+                selectedTab = .plan; showSidebar = false
+            }
+            navItem(icon: "globe", label: "Webb", isActive: selectedTab == .browser) {
+                selectedTab = .browser; showSidebar = false
+            }
+            navItem(icon: "tray.2.fill", label: "Artefakter", isActive: selectedTab == .artifacts,
+                    badge: artifactStore.artifacts.isEmpty ? nil : "\(artifactStore.artifacts.count)") {
+                selectedTab = .artifacts; showSidebar = false
+            }
+            navItem(
+                icon: "chevron.left.forwardslash.chevron.right",
+                label: "GitHub",
+                isActive: selectedTab == .github,
+                badge: {
+                    if case .authorized = ghManager.authState, !ghManager.repos.isEmpty {
+                        return "\(ghManager.repos.count)"
+                    }
+                    return nil
+                }()
+            ) {
+                selectedTab = .github; showSidebar = false
+            }
+
+            Divider().opacity(0.08).padding(.vertical, 4)
+
+            navItem(icon: "plus.rectangle.on.folder", label: "Nytt projekt", isActive: false) {
+                showSidebar = false
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { showNewProject = true }
+            }
+            navItem(icon: "folder.badge.plus", label: "Öppna från iCloud", isActive: false) {
+                showOpenProject = true
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.top, 4)
+    }
+
+    // MARK: - Context-aware history
+
+    @ViewBuilder
+    var contextualHistory: some View {
+        switch selectedTab {
+        case .chat:
+            chatHistory
+        case .project:
+            projectHistory
+        case .plan:
+            planHistory
+        case .browser:
+            browserHistory
+        case .artifacts:
+            artifactHistory
+        case .github:
+            githubHistory
+        }
+    }
+
+    // MARK: - Chat history
+
+    var filteredChats: [ChatConversation] {
+        searchText.isEmpty
+            ? chatManager.conversations
+            : chatManager.conversations.filter { $0.title.localizedCaseInsensitiveContains(searchText) }
+    }
+
+    @ViewBuilder
+    var chatHistory: some View {
+        if !filteredChats.isEmpty {
+            VStack(alignment: .leading, spacing: 0) {
+                sectionHeader("Chattar")
+                ForEach(filteredChats) { conv in
+                    chatRow(conv)
+                }
+            }
+        } else if searchText.isEmpty {
+            emptyHistoryHint(icon: "bubble.left.and.bubble.right", text: "Inga chattar ännu")
+        }
+    }
+
+    @ViewBuilder
+    private func chatRow(_ conv: ChatConversation) -> some View {
+        Button {
+            chatManager.activeConversation = conv
+            selectedTab = .chat
+            showSidebar = false
+        } label: {
+            historyRowContent(
+                title: conv.title,
+                subtitle: "\(conv.messages.count) meddelanden",
+                isActive: chatManager.activeConversation?.id == conv.id
+            )
+        }
+        .buttonStyle(.plain)
+        .contextMenu {
+            Button(role: .destructive) {
+                Task { await chatManager.delete(conv) }
+            } label: { Label("Radera", systemImage: "trash") }
+        }
+    }
+
+    // MARK: - Project history
+
+    var filteredProjects: [EonProject] {
+        searchText.isEmpty
+            ? projectStore.projects
+            : projectStore.projects.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
+    }
+
+    @ViewBuilder
+    var projectHistory: some View {
+        if !filteredProjects.isEmpty {
+            VStack(alignment: .leading, spacing: 0) {
+                sectionHeader("Projekt")
+                ForEach(filteredProjects) { project in
+                    projectRow(project)
+                }
+            }
+        } else if searchText.isEmpty {
+            emptyHistoryHint(icon: "folder", text: "Inga projekt ännu")
+        }
+    }
+
+    @ViewBuilder
+    private func projectRow(_ project: EonProject) -> some View {
+        Button {
+            projectStore.activeProject = project
+            selectedTab = .project
+            showSidebar = false
+        } label: {
+            HStack(spacing: 10) {
+                Circle()
+                    .fill(project.color.color)
+                    .frame(width: 8, height: 8)
+                Text(project.name)
+                    .font(.system(size: 14))
+                    .foregroundColor(.primary)
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                if projectStore.activeProject?.id == project.id {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(.accentColor)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .background(
+                projectStore.activeProject?.id == project.id
+                    ? Color(UIColor.secondarySystemBackground) : Color.clear
+            )
+        }
+        .buttonStyle(.plain)
+        .contextMenu {
+            Button(role: .destructive) {
+                Task { await projectStore.delete(project) }
+            } label: { Label("Ta bort", systemImage: "trash") }
+        }
+    }
+
+    // MARK: - Plan history
+
+    var filteredPlans: [ProjectPlan] {
+        searchText.isEmpty
+            ? planManager.plans
+            : planManager.plans.filter { $0.title.localizedCaseInsensitiveContains(searchText) }
+    }
+
+    @ViewBuilder
+    var planHistory: some View {
+        if !filteredPlans.isEmpty {
+            VStack(alignment: .leading, spacing: 0) {
+                // Group by status
+                let active = filteredPlans.filter { $0.status == .active }
+                let drafts = filteredPlans.filter { $0.status == .draft }
+                let completed = filteredPlans.filter { $0.status == .completed }
+                let archived = filteredPlans.filter { $0.status == .archived }
+
+                if !active.isEmpty {
+                    sectionHeader("Aktiva")
+                    ForEach(active) { plan in planRow(plan) }
+                }
+                if !drafts.isEmpty {
+                    sectionHeader("Utkast")
+                    ForEach(drafts) { plan in planRow(plan) }
+                }
+                if !completed.isEmpty {
+                    sectionHeader("Klara")
+                    ForEach(completed) { plan in planRow(plan) }
+                }
+                if !archived.isEmpty {
+                    sectionHeader("Arkiverade")
+                    ForEach(archived) { plan in planRow(plan) }
+                }
+            }
+        } else if searchText.isEmpty {
+            emptyHistoryHint(icon: "map", text: "Inga planer ännu")
+        }
+    }
+
+    @ViewBuilder
+    private func planRow(_ plan: ProjectPlan) -> some View {
+        Button {
+            planManager.activePlan = plan
+            selectedTab = .plan
+            showSidebar = false
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: plan.status.icon)
+                    .font(.system(size: 12))
+                    .foregroundColor(.secondary)
+                    .frame(width: 18)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(plan.title)
+                        .font(.system(size: 14))
+                        .foregroundColor(.primary)
+                        .lineLimit(1)
+                    if !plan.summary.isEmpty {
+                        Text(plan.summary)
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary)
+                            .lineLimit(1)
+                    } else {
+                        Text("\(plan.messages.count) meddelanden · \(plan.updatedAt.relativeString)")
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                if planManager.activePlan?.id == plan.id {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(.accentColor)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .background(
+                planManager.activePlan?.id == plan.id
+                    ? Color(UIColor.secondarySystemBackground) : Color.clear
+            )
+        }
+        .buttonStyle(.plain)
+        .contextMenu {
+            Button { planManager.updateStatus(plan, status: .active) } label: {
+                Label("Markera som aktiv", systemImage: "bolt")
+            }
+            Button { planManager.updateStatus(plan, status: .completed) } label: {
+                Label("Markera som klar", systemImage: "checkmark.seal")
+            }
+            Button { planManager.updateStatus(plan, status: .archived) } label: {
+                Label("Arkivera", systemImage: "archivebox")
+            }
+            Divider()
+            Button(role: .destructive) {
+                planManager.delete(plan)
+            } label: { Label("Radera", systemImage: "trash") }
+        }
+    }
+
+    // MARK: - Browser history (placeholder — browser has no persistent history yet)
+
+    @ViewBuilder
+    var browserHistory: some View {
+        emptyHistoryHint(icon: "globe", text: "Webbläsarhistorik visas här")
+    }
+
+    // MARK: - GitHub history
+
+    var filteredGitHubRepos: [GitHubRepo] {
+        let repos = ghManager.repos
+        if searchText.isEmpty { return repos }
+        return repos.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
+    }
+
+    @ViewBuilder
+    var githubHistory: some View {
+        if case .notAuthorized = ghManager.authState {
+            emptyHistoryHint(icon: "chevron.left.forwardslash.chevron.right",
+                             text: "Anslut GitHub i GitHub-vyn")
+        } else if ghManager.isLoadingRepos {
+            VStack(spacing: 8) {
+                ProgressView()
+                Text("Hämtar repos…")
+                    .font(.system(size: 13))
+                    .foregroundColor(.secondary)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.top, 24)
+        } else if !filteredGitHubRepos.isEmpty {
+            VStack(alignment: .leading, spacing: 0) {
+                sectionHeader("Repos")
+                ForEach(filteredGitHubRepos) { repo in
+                    Button {
+                        selectedTab = .github
+                        showSidebar = false
+                    } label: {
+                        HStack(spacing: 10) {
+                            Image(systemName: repo.isPrivate ? "lock.fill" : "chevron.left.forwardslash.chevron.right")
+                                .font(.system(size: 13))
+                                .foregroundColor(.secondary)
+                                .frame(width: 18)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(repo.name)
+                                    .font(.system(size: 14))
+                                    .foregroundColor(.primary)
+                                    .lineLimit(1)
+                                HStack(spacing: 4) {
+                                    Image(systemName: "arrow.triangle.branch")
+                                        .font(.system(size: 10))
+                                    Text(repo.currentBranch)
+                                        .font(.system(size: 11))
+                                }
+                                .foregroundColor(.secondary)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        } else {
+            emptyHistoryHint(icon: "chevron.left.forwardslash.chevron.right",
+                             text: searchText.isEmpty ? "Inga repos" : "Inga träffar")
+        }
+    }
+
+    // MARK: - Artifact history (recent artifacts)
+
+    var filteredArtifacts: [Artifact] {
+        let all = searchText.isEmpty
+            ? Array(artifactStore.artifacts.prefix(20))
+            : artifactStore.search(searchText)
+        return all
+    }
+
+    @ViewBuilder
+    var artifactHistory: some View {
+        if !filteredArtifacts.isEmpty {
+            VStack(alignment: .leading, spacing: 0) {
+                sectionHeader("Senaste artefakter")
+                ForEach(filteredArtifacts) { artifact in
+                    Button {
+                        selectedTab = .artifacts
+                        showSidebar = false
+                    } label: {
+                        HStack(spacing: 10) {
+                            Image(systemName: artifact.displayIcon)
+                                .font(.system(size: 13))
+                                .foregroundColor(artifact.displayColor)
+                                .frame(width: 18)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(artifact.title)
+                                    .font(.system(size: 14))
+                                    .foregroundColor(.primary)
+                                    .lineLimit(1)
+                                Text("\(artifact.type.displayName) · \(artifact.sizeDescription)")
+                                    .font(.system(size: 11))
+                                    .foregroundColor(.secondary)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        } else if searchText.isEmpty {
+            emptyHistoryHint(icon: "tray.2", text: "Inga artefakter ännu")
+        }
+    }
+
+    // MARK: - Shared helpers
+
+    @ViewBuilder
+    private func historyRowContent(title: String, subtitle: String, isActive: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .font(.system(size: 14))
+                .foregroundColor(.primary)
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Text(subtitle)
+                .font(.system(size: 11))
+                .foregroundColor(.secondary)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(isActive ? Color(UIColor.secondarySystemBackground) : Color.clear)
+    }
+
+    @ViewBuilder
+    private func emptyHistoryHint(icon: String, text: String) -> some View {
+        VStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.system(size: 24))
+                .foregroundColor(.secondary.opacity(0.3))
+            Text(text)
+                .font(.system(size: 13))
+                .foregroundColor(.secondary.opacity(0.5))
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 24)
+        .padding(.horizontal, 16)
+    }
+
+    @ViewBuilder
+    private func navItem(icon: String, label: String, isActive: Bool, badge: String? = nil, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                Image(systemName: icon)
+                    .font(.system(size: 16))
+                    .foregroundColor(isActive ? .accentColor : .secondary)
+                    .frame(width: 22)
+                Text(label)
+                    .font(.system(size: 15, weight: isActive ? .semibold : .regular))
+                    .foregroundColor(.primary)
+                Spacer()
+                if let badge {
+                    Text(badge)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 2)
+                        .background(Color(UIColor.tertiarySystemBackground))
+                        .cornerRadius(10)
+                }
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 9)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(isActive ? Color(UIColor.secondarySystemBackground) : Color.clear)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    @ViewBuilder
+    private func sectionHeader(_ title: String) -> some View {
+        Text(title)
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundColor(.secondary)
+            .padding(.horizontal, 16)
+            .padding(.top, 12)
+            .padding(.bottom, 4)
+    }
+
+    // MARK: - Bottom bar
+
+    var bottomBar: some View {
+        HStack(spacing: 12) {
+            HStack(spacing: 5) {
+                Circle()
+                    .fill(statusBroadcaster.remoteMacIsOnline ? Color.green : Color.secondary.opacity(0.4))
+                    .frame(width: 7, height: 7)
+                Text(statusBroadcaster.remoteMacIsOnline ? "Mac ansluten" : "Mac offline")
+                    .font(.system(size: 12))
+                    .foregroundColor(statusBroadcaster.remoteMacIsOnline ? .green : .secondary)
+            }
+            Spacer()
+            Button { showSettings = true } label: {
+                Image(systemName: "gearshape")
+                    .font(.system(size: 18))
+                    .foregroundColor(.primary)
+                    .frame(width: 40, height: 40)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .padding(.bottom, bottomSafeArea)
+    }
+
+    // MARK: - Open project from URL
+
+    private func openProjectFromURL(_ url: URL) {
+        let accessed = url.startAccessingSecurityScopedResource()
+        defer { if accessed { url.stopAccessingSecurityScopedResource() } }
+
+        let name = url.lastPathComponent
+        var project = EonProject(name: name, rootPath: url.path, iCloudPath: url.path)
+        project.localPath = url.path
+
+        Task {
+            await projectStore.save(project)
+            await MainActor.run {
+                projectStore.activeProject = project
+                selectedTab = .project
+                showSidebar = false
+            }
+        }
+    }
+
+    // MARK: - Safe area helpers
+
+    private var topSafeArea: CGFloat {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first?.windows.first?.safeAreaInsets.top ?? 44
+    }
+
+    private var bottomSafeArea: CGFloat {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first?.windows.first?.safeAreaInsets.bottom ?? 0
+    }
+}
+
+// MARK: - iCloud Document Picker
+
+struct iCloudProjectPicker: UIViewControllerRepresentable {
+    let onPick: (URL) -> Void
+
+    func makeCoordinator() -> Coordinator { Coordinator(onPick: onPick) }
+
+    func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
+        let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.folder], asCopy: false)
+        picker.allowsMultipleSelection = false
+        picker.shouldShowFileExtensions = true
+        picker.delegate = context.coordinator
+        return picker
+    }
+
+    func updateUIViewController(_ uiViewController: UIDocumentPickerViewController, context: Context) {}
+
+    class Coordinator: NSObject, UIDocumentPickerDelegate {
+        let onPick: (URL) -> Void
+        init(onPick: @escaping (URL) -> Void) { self.onPick = onPick }
+
+        func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+            guard let url = urls.first else { return }
+            onPick(url)
+        }
+    }
+}
+
+#endif

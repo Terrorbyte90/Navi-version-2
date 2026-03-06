@@ -8,73 +8,124 @@ struct BrowserInputView: View {
     @State private var input = ""
     @FocusState private var isFocused: Bool
 
-    var placeholder: String {
-        switch agent.status {
-        case .waitingForUser: return "Agenten väntar på ditt svar… (\(agent.userQuestion))"
-        case .working:        return "Pågår: \(agent.pageTitle.isEmpty ? "surfar…" : agent.pageTitle)"
-        default:              return "Ge webbläsaren ett mål…"
-        }
-    }
+    private var isWaiting: Bool { agent.status == .waitingForUser }
+    private var isWorking: Bool { agent.status == .working }
 
     var body: some View {
-        VStack(spacing: 0) {
-            Divider().opacity(0.15)
-            HStack(spacing: 10) {
-                // URL indicator
-                if let url = agent.currentURL {
-                    Text(url.host ?? "")
-                        .font(.system(size: 11, design: .monospaced))
-                        .foregroundColor(.secondary.opacity(0.6))
-                        .lineLimit(1)
-                        .frame(maxWidth: 120)
-                }
+        HStack(spacing: 10) {
+            // Status dot
+            statusDot
 
-                TextField(placeholder, text: $input)
+            // Text field
+            ZStack(alignment: .leading) {
+                if input.isEmpty {
+                    Text(placeholderText)
+                        .font(.system(size: 14))
+                        .foregroundColor(.secondary.opacity(0.5))
+                        .allowsHitTesting(false)
+                }
+                TextField("", text: $input)
                     .textFieldStyle(.plain)
-                    .font(.system(size: 13))
+                    .font(.system(size: 14))
                     .focused($isFocused)
                     .onSubmit { handleSend() }
-                    .foregroundColor(agent.status == .waitingForUser ? .yellow : .primary)
-
-                mainButton
+                    .foregroundColor(isWaiting ? .yellow : .primary)
+                    .disabled(isWorking)
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
+
+            // Action button
+            actionButton
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+    }
+
+    // MARK: - Status dot
+
+    private var statusDot: some View {
+        ZStack {
+            Circle()
+                .fill(dotColor.opacity(0.15))
+                .frame(width: 28, height: 28)
+            Image(systemName: dotIcon)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(dotColor)
         }
     }
+
+    private var dotColor: Color {
+        switch agent.status {
+        case .working:        return .green
+        case .waitingForUser: return .yellow
+        case .complete:       return .accentEon
+        case .failed:         return .red
+        case .idle:           return .secondary
+        }
+    }
+
+    private var dotIcon: String {
+        switch agent.status {
+        case .working:        return "cpu"
+        case .waitingForUser: return "questionmark"
+        case .complete:       return "checkmark"
+        case .failed:         return "xmark"
+        case .idle:           return "globe"
+        }
+    }
+
+    // MARK: - Placeholder
+
+    private var placeholderText: String {
+        switch agent.status {
+        case .waitingForUser: return agent.userQuestion.isEmpty ? "Skriv ditt svar…" : agent.userQuestion
+        case .working:        return "Agenten arbetar…"
+        case .complete:       return "Klart! Ge ett nytt mål…"
+        case .failed:         return "Misslyckades. Försök igen…"
+        case .idle:           return "Ge webbläsaren ett mål…"
+        }
+    }
+
+    // MARK: - Action button
 
     @ViewBuilder
-    private var mainButton: some View {
-        switch agent.status {
-        case .working:
-            Button("Avbryt") {
-                agent.cancel()
-            }
-            .buttonStyle(.plain)
-            .foregroundColor(.red)
-            .font(.system(size: 13, weight: .medium))
-
-        case .waitingForUser:
-            Button("Skicka") {
-                handleSend()
-            }
-            .buttonStyle(.plain)
-            .foregroundColor(.yellow)
-            .font(.system(size: 13, weight: .medium))
-            .disabled(input.isBlank)
-
-        default:
+    private var actionButton: some View {
+        if isWorking {
             Button {
-                handleSend()
+                agent.cancel()
             } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "stop.fill")
+                        .font(.system(size: 11))
+                    Text("Avbryt")
+                        .font(.system(size: 13, weight: .medium))
+                }
+                .foregroundColor(.red)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(Color.red.opacity(0.12))
+                .cornerRadius(8)
+            }
+            .buttonStyle(.plain)
+        } else if isWaiting {
+            Button { handleSend() } label: {
                 Image(systemName: "arrow.up.circle.fill")
-                    .font(.system(size: 22))
-                    .foregroundColor(input.isBlank ? .secondary : .accentEon)
+                    .font(.system(size: 26))
+                    .foregroundColor(input.isBlank ? .secondary.opacity(0.4) : .yellow)
+            }
+            .buttonStyle(.plain)
+            .disabled(input.isBlank)
+        } else {
+            Button { handleSend() } label: {
+                Image(systemName: "arrow.up.circle.fill")
+                    .font(.system(size: 26))
+                    .foregroundColor(input.isBlank ? .secondary.opacity(0.3) : .accentEon)
             }
             .buttonStyle(.plain)
             .disabled(input.isBlank)
         }
     }
+
+    // MARK: - Send
 
     private func handleSend() {
         let text = input.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -82,11 +133,20 @@ struct BrowserInputView: View {
         input = ""
         isFocused = false
 
-        switch agent.status {
-        case .waitingForUser:
+        if isWaiting {
             agent.provideUserInput(text)
-        default:
+        } else {
             Task { await agent.execute(goal: text) }
         }
     }
+}
+
+// MARK: - Preview
+
+#Preview("BrowserInputView") {
+    VStack {
+        BrowserInputView(agent: BrowserAgent.shared)
+    }
+    .background(Color.black)
+    .preferredColorScheme(.dark)
 }

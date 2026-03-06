@@ -20,7 +20,7 @@ struct BrowserLogEntry: Identifiable {
 }
 
 @MainActor
-final class BrowserAgent: NSObject, ObservableObject, WKNavigationDelegate {
+final class BrowserAgent: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelegate {
     static let shared = BrowserAgent()
 
     @Published var status: BrowserStatus = .idle
@@ -28,22 +28,55 @@ final class BrowserAgent: NSObject, ObservableObject, WKNavigationDelegate {
     @Published var log: [BrowserLogEntry] = []
     @Published var pageTitle: String = ""
     @Published var userQuestion: String = ""
+    @Published var loadingProgress: Double = 0
 
     let webView: WKWebView = {
         let config = WKWebViewConfiguration()
         config.preferences.javaScriptEnabled = true
+        config.preferences.javaScriptCanOpenWindowsAutomatically = false
+
+        let prefs = WKWebpagePreferences()
+        prefs.allowsContentJavaScript = true
+        config.defaultWebpagePreferences = prefs
+
         let wv = WKWebView(frame: .zero, configuration: config)
-        wv.customUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
+        wv.customUserAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+        wv.allowsBackForwardNavigationGestures = true
         return wv
     }()
 
     private let api = ClaudeAPIClient.shared
     private var userInputContinuation: CheckedContinuation<String, Never>?
     private var navigationContinuation: CheckedContinuation<Void, Error>?
+    private var progressObservation: NSKeyValueObservation?
+    private var titleObservation: NSKeyValueObservation?
+    private var urlObservation: NSKeyValueObservation?
 
     private override init() {
         super.init()
         webView.navigationDelegate = self
+        webView.uiDelegate = self
+        setupObservers()
+    }
+
+    // MARK: - KVO Observers
+
+    private func setupObservers() {
+        progressObservation = webView.observe(\.estimatedProgress, options: .new) { [weak self] wv, _ in
+            Task { @MainActor [weak self] in
+                self?.loadingProgress = wv.estimatedProgress
+            }
+        }
+        titleObservation = webView.observe(\.title, options: .new) { [weak self] wv, _ in
+            Task { @MainActor [weak self] in
+                self?.pageTitle = wv.title ?? ""
+            }
+        }
+        urlObservation = webView.observe(\.url, options: .new) { [weak self] wv, _ in
+            Task { @MainActor [weak self] in
+                self?.currentURL = wv.url
+            }
+        }
     }
 
     // MARK: - Main execute loop
@@ -68,11 +101,10 @@ final class BrowserAgent: NSObject, ObservableObject, WKNavigationDelegate {
                 appendLog("⚠️ Extraktion misslyckades: \(error.localizedDescription)", isError: true)
                 failureStreak += 1
                 if failureStreak > 3 { status = .failed; break }
+                try? await Task.sleep(for: .seconds(1))
                 continue
             }
             failureStreak = 0
-            currentURL = webView.url
-            pageTitle = pageContent.title
 
             // Decide next action
             let action: BrowserAction
@@ -85,6 +117,8 @@ final class BrowserAgent: NSObject, ObservableObject, WKNavigationDelegate {
                 )
             } catch {
                 appendLog("⚠️ Kunde inte bestämma nästa steg: \(error.localizedDescription)", isError: true)
+                failureStreak += 1
+                if failureStreak > 3 { status = .failed; break }
                 continue
             }
 
@@ -97,12 +131,11 @@ final class BrowserAgent: NSObject, ObservableObject, WKNavigationDelegate {
                     try await navigate(to: url)
 
                 case .click(let selector):
-                    // Handle link index [N]
                     if let idx = linkIndex(from: selector), idx < pageContent.links.count {
                         try await navigate(to: pageContent.links[idx].href)
                     } else {
                         try await PageExtractor.clickElement(selector: selector, in: webView)
-                        try await Task.sleep(for: .seconds(1))
+                        try? await Task.sleep(for: .seconds(1))
                     }
 
                 case .type(let selector, let text):
@@ -122,13 +155,14 @@ final class BrowserAgent: NSObject, ObservableObject, WKNavigationDelegate {
                     appendLog("👁 Vision: \(analysis)")
 
                 case .waitForLoad:
-                    try await Task.sleep(for: .seconds(2))
+                    try? await Task.sleep(for: .seconds(2))
 
                 case .askUser(let question):
                     status = .waitingForUser
                     userQuestion = question
                     appendLog("❓ Väntar på svar: \(question)")
                     let answer = await waitForUserInput()
+                    if answer.isEmpty { status = .idle; return }
                     appendLog("💬 Svar: \(answer)")
                     status = .working
 
@@ -138,9 +172,8 @@ final class BrowserAgent: NSObject, ObservableObject, WKNavigationDelegate {
 
                 case .goalFailed(let reason):
                     appendLog("❌ Misslyckades: \(reason)", isError: true)
-                    // Try recovery once
+                    failureStreak += 1
                     if failureStreak < 2 {
-                        failureStreak += 1
                         appendLog("🔄 Försöker alternativ strategi…")
                     } else {
                         status = .failed
@@ -152,9 +185,8 @@ final class BrowserAgent: NSObject, ObservableObject, WKNavigationDelegate {
                 if failureStreak > 5 { status = .failed }
             }
 
-            // Natural delay between actions
             if status == .working {
-                try? await Task.sleep(for: .milliseconds(600))
+                try? await Task.sleep(for: .milliseconds(500))
             }
         }
 
@@ -172,6 +204,10 @@ final class BrowserAgent: NSObject, ObservableObject, WKNavigationDelegate {
             throw BrowserError.navigationFailed(urlString)
         }
 
+        // Cancel any pending navigation continuation
+        navigationContinuation?.resume(throwing: BrowserError.navigationFailed("Cancelled"))
+        navigationContinuation = nil
+
         try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
             navigationContinuation = cont
             webView.load(URLRequest(url: url))
@@ -183,6 +219,7 @@ final class BrowserAgent: NSObject, ObservableObject, WKNavigationDelegate {
     func provideUserInput(_ input: String) {
         userInputContinuation?.resume(returning: input)
         userInputContinuation = nil
+        userQuestion = ""
     }
 
     private func waitForUserInput() async -> String {
@@ -198,6 +235,9 @@ final class BrowserAgent: NSObject, ObservableObject, WKNavigationDelegate {
         status = .idle
         userInputContinuation?.resume(returning: "")
         userInputContinuation = nil
+        navigationContinuation?.resume(throwing: BrowserError.navigationFailed("Cancelled"))
+        navigationContinuation = nil
+        userQuestion = ""
     }
 
     // MARK: - Helpers
@@ -220,11 +260,15 @@ final class BrowserAgent: NSObject, ObservableObject, WKNavigationDelegate {
             self.navigationContinuation = nil
             self.currentURL = webView.url
             self.pageTitle = webView.title ?? ""
+            self.loadingProgress = 1.0
         }
     }
 
     nonisolated func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
         Task { @MainActor in
+            // Ignore cancelled navigation errors
+            let nsError = error as NSError
+            if nsError.code == NSURLErrorCancelled { return }
             self.navigationContinuation?.resume(throwing: error)
             self.navigationContinuation = nil
         }
@@ -232,8 +276,26 @@ final class BrowserAgent: NSObject, ObservableObject, WKNavigationDelegate {
 
     nonisolated func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
         Task { @MainActor in
+            let nsError = error as NSError
+            if nsError.code == NSURLErrorCancelled { return }
             self.navigationContinuation?.resume(throwing: error)
             self.navigationContinuation = nil
         }
+    }
+
+    nonisolated func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+        Task { @MainActor in
+            self.loadingProgress = 0.1
+        }
+    }
+
+    // Prevent popups
+    nonisolated func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
+        if navigationAction.targetFrame == nil {
+            Task { @MainActor in
+                webView.load(navigationAction.request)
+            }
+        }
+        return nil
     }
 }

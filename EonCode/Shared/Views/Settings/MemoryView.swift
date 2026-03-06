@@ -270,3 +270,27 @@ struct EditMemorySheet: View {
         }
     }
 }
+
+// MARK: - Previews
+
+#Preview("MemoryView – tom") {
+    MemoryView()
+        .frame(width: 400, height: 500)
+        .preferredColorScheme(.dark)
+}
+
+#Preview("MemoryCategorySection") {
+    let memories = [
+        Memory(fact: "Heter Ted och jobbar på Futura Luna", category: .personal, source: .manual),
+        Memory(fact: "Föredrar SwiftUI framför UIKit", category: .personal, source: .manual),
+    ]
+    MemoryCategorySection(
+        category: .personal,
+        memories: memories,
+        onEdit: { _ in },
+        onDelete: { _ in }
+    )
+    .padding()
+    .background(Color.black)
+    .preferredColorScheme(.dark)
+}

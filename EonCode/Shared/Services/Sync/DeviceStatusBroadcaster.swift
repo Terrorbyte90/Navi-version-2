@@ -48,11 +48,20 @@ final class DeviceStatusBroadcaster: ObservableObject {
     private init() {
         startBroadcasting()
         startWatching()
+
+        // iOS: start auto-discovery of Mac HTTP server + Bonjour browsing
+        #if os(iOS)
+        Task {
+            LocalNetworkClient.shared.startAutoDiscovery()
+            PeerSyncEngine.shared.startBrowsing()
+        }
+        #endif
     }
 
     // MARK: - Broadcast our status
 
     func startBroadcasting() {
+        broadcastTask?.cancel()
         broadcastTask = Task {
             while !Task.isCancelled {
                 await broadcast()
@@ -82,6 +91,7 @@ final class DeviceStatusBroadcaster: ObservableObject {
     // MARK: - Watch remote status
 
     func startWatching() {
+        watchTask?.cancel()
         watchTask = Task {
             while !Task.isCancelled {
                 await fetchRemoteStatus()
@@ -95,24 +105,45 @@ final class DeviceStatusBroadcaster: ObservableObject {
               let files = try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)
         else { return }
 
-        for file in files where file.pathExtension == "json" {
+        let jsonFiles = files.filter { $0.pathExtension == "json" }
+        let myID = UIDevice.deviceID
+
+        // Look for a remote device file (not ours)
+        var foundRemote = false
+        for file in jsonFiles {
             guard let status = try? await sync.read(DeviceStatus.self, from: file),
-                  status.deviceID != UIDevice.deviceID
+                  status.deviceID != myID
             else { continue }
 
             remoteStatus = status
             let isRecent = Date().timeIntervalSince(status.lastUpdate) < 30
-            remoteMacIsOnline = isRecent && status.isMac
+            if status.isMac && isRecent {
+                remoteMacIsOnline = true
+                foundRemote = true
+            }
         }
 
-        // If no remote file found, mac is offline
-        if files.filter({ $0.pathExtension == "json" }).count <= 1 {
-            remoteMacIsOnline = false
+        // Only mark offline if we explicitly found no recent Mac file
+        if !foundRemote {
+            // Don't immediately flip to offline — give grace period.
+            // Only flip if we haven't seen Mac in 60s.
+            if let remote = remoteStatus, remote.isMac,
+               let last = Optional(remote.lastUpdate) {
+                remoteMacIsOnline = Date().timeIntervalSince(last) < 60
+            } else {
+                remoteMacIsOnline = false
+            }
         }
     }
 
     func stopAll() {
         broadcastTask?.cancel()
         watchTask?.cancel()
+        broadcastTask = nil
+        watchTask = nil
+        #if os(iOS)
+        LocalNetworkClient.shared.stopAutoDiscovery()
+        PeerSyncEngine.shared.stopBrowsing()
+        #endif
     }
 }

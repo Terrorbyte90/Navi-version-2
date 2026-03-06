@@ -34,10 +34,10 @@ final class InstructionComposer: ObservableObject {
         isSending = true
         defer { isSending = false }
 
-        // Try iCloud first
+        // 1. iCloud (always — guaranteed delivery even if Mac is offline)
         await InstructionQueue.shared.enqueue(instruction)
 
-        // Try Bonjour if connected peer
+        // 2. Bonjour peer connection (lowest latency when on same Wi-Fi)
         if let conn = PeerSyncEngine.shared.connections.first {
             let packet = SyncPacket(
                 type: "instruction",
@@ -47,12 +47,12 @@ final class InstructionComposer: ObservableObject {
             PeerSyncEngine.shared.sendSyncPacket(packet, to: conn)
         }
 
-        // Try local HTTP as fallback
-        if !SettingsStore.shared.macServerURL.isEmpty,
-           let macURL = URL(string: SettingsStore.shared.macServerURL) {
-            LocalNetworkClient.shared.setMacAddress(macURL)
-            try? await LocalNetworkClient.shared.postInstruction(instruction)
+        // 3. Local HTTP (fast when Mac is reachable, auto-discovers if needed)
+        if SettingsStore.shared.macServerURL.isEmpty {
+            // Try to discover Mac before giving up
+            await LocalNetworkClient.shared.discoverMac()
         }
+        try? await LocalNetworkClient.shared.postInstruction(instruction)
     }
 
     // MARK: - Load pending from iCloud
@@ -110,10 +110,4 @@ final class InstructionComposer: ObservableObject {
     }
 }
 
-extension PeerSyncEngine {
-    var connections: [NWConnection] {
-        // Expose connections for iOS use
-        []  // handled internally
-    }
-}
 #endif

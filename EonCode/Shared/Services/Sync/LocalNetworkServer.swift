@@ -2,8 +2,9 @@ import Foundation
 import Network
 
 // MARK: - Local HTTP server (tertiary sync method)
-// Mac runs server on port 52731, iOS connects via HTTP
-// No third-party dependencies - pure Network.framework
+// Mac runs server on port 52731, iOS connects via HTTP.
+// The server also advertises itself via Bonjour (_eoncode-http._tcp) so iOS
+// can auto-discover the Mac's IP without any manual configuration.
 
 @MainActor
 final class LocalNetworkServer: ObservableObject {
@@ -22,24 +23,42 @@ final class LocalNetworkServer: ObservableObject {
 
     func start() {
         #if os(macOS)
+        listener?.cancel()
+        listener = nil
+
         let params = NWParameters.tcp
         guard let listener = try? NWListener(using: params, on: port) else { return }
+
+        // Advertise via Bonjour so iOS can auto-discover us
+        listener.service = NWListener.Service(
+            name: UIDevice.deviceName,
+            type: Constants.Sync.httpServiceType
+        )
 
         listener.stateUpdateHandler = { [weak self] state in
             Task { @MainActor in
                 switch state {
                 case .ready:
                     self?.isRunning = true
-                    self?.serverURL = URL(string: "http://localhost:\(Constants.Sync.localHTTPPort)")
+                    // Resolve and publish our local IP so iOS can connect
+                    let ip = self?.localIPAddress() ?? "localhost"
+                    self?.serverURL = URL(string: "http://\(ip):\(Constants.Sync.localHTTPPort)")
+                    // Also write our URL to iCloud so iOS can find us even without Bonjour
+                    await self?.publishURLToiCloud()
                 case .failed:
                     self?.isRunning = false
+                    self?.listener = nil
+                    try? await Task.sleep(nanoseconds: 3_000_000_000)
+                    self?.start()
                 default: break
                 }
             }
         }
 
         listener.newConnectionHandler = { [weak self] connection in
-            self?.handleConnection(connection)
+            Task { @MainActor in
+                self?.handleConnection(connection)
+            }
         }
 
         listener.start(queue: .global(qos: .userInitiated))
@@ -54,12 +73,63 @@ final class LocalNetworkServer: ObservableObject {
         serverURL = nil
     }
 
+    // MARK: - Publish our URL to iCloud so iOS can find us
+
+    private func publishURLToiCloud() async {
+        guard let url = serverURL,
+              let root = iCloudSyncEngine.shared.eonCodeRoot
+        else { return }
+
+        let macInfoURL = root.appendingPathComponent("mac-server.json")
+        let info: [String: String] = [
+            "url": url.absoluteString,
+            "deviceName": UIDevice.deviceName,
+            "timestamp": Date().iso8601
+        ]
+        if let data = try? JSONSerialization.data(withJSONObject: info) {
+            try? await iCloudSyncEngine.shared.writeData(data, to: macInfoURL)
+        }
+    }
+
+    // MARK: - Resolve local IP address
+
+    private func localIPAddress() -> String? {
+        var address: String?
+        var ifaddr: UnsafeMutablePointer<ifaddrs>?
+        guard getifaddrs(&ifaddr) == 0 else { return nil }
+        defer { freeifaddrs(ifaddr) }
+
+        var ptr = ifaddr
+        while let current = ptr {
+            let flags = Int32(current.pointee.ifa_flags)
+            let isUp = (flags & IFF_UP) != 0
+            let isLoopback = (flags & IFF_LOOPBACK) != 0
+
+            if isUp && !isLoopback,
+               current.pointee.ifa_addr.pointee.sa_family == UInt8(AF_INET) {
+                var hostname = [CChar](repeating: 0, count: Int(NI_MAXHOST))
+                getnameinfo(current.pointee.ifa_addr, socklen_t(current.pointee.ifa_addr.pointee.sa_len),
+                            &hostname, socklen_t(hostname.count), nil, 0, NI_NUMERICHOST)
+                let candidate = String(cString: hostname)
+                // Prefer en0 (Wi-Fi) addresses
+                if let name = current.pointee.ifa_name.map({ String(cString: $0) }),
+                   name.hasPrefix("en") {
+                    address = candidate
+                } else if address == nil {
+                    address = candidate
+                }
+            }
+            ptr = current.pointee.ifa_next
+        }
+        return address
+    }
+
     // MARK: - Handle HTTP connection
 
     private func handleConnection(_ connection: NWConnection) {
         connection.start(queue: .global(qos: .userInitiated))
 
-        connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { [weak self] data, _, isComplete, error in
+        connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { [weak self] data, _, _, _ in
             guard let data = data, !data.isEmpty else { return }
             let request = String(data: data, encoding: .utf8) ?? ""
             Task { @MainActor in
@@ -78,7 +148,6 @@ final class LocalNetworkServer: ObservableObject {
         let method = parts[0]
         let path = parts[1]
 
-        // Parse body (after double CRLF)
         var bodyData: Data? = nil
         if let bodyStart = raw.range(of: "\r\n\r\n") {
             let bodyString = String(raw[bodyStart.upperBound...])
@@ -99,7 +168,13 @@ final class LocalNetworkServer: ObservableObject {
             let filePath = String(p.dropFirst(7))
             return await handlePutFile(path: filePath.removingPercentEncoding ?? filePath, body: bodyData)
         case ("GET", "/ping"):
-            return HTTPResponse(statusCode: 200, body: "{\"pong\":true}".data(using: .utf8)!, contentType: "application/json")
+            let pong: [String: Any] = [
+                "pong": true,
+                "deviceName": UIDevice.deviceName,
+                "serverURL": serverURL?.absoluteString ?? ""
+            ]
+            guard let data = try? JSONSerialization.data(withJSONObject: pong) else { return .serverError() }
+            return HTTPResponse(statusCode: 200, body: data, contentType: "application/json")
         default:
             return .notFound()
         }
@@ -111,7 +186,8 @@ final class LocalNetworkServer: ObservableObject {
             "isMac": UIDevice.isMac,
             "timestamp": Date().iso8601,
             "agentRunning": AgentEngine.shared.isRunning,
-            "agentStatus": AgentEngine.shared.statusMessage
+            "agentStatus": AgentEngine.shared.statusMessage,
+            "serverURL": serverURL?.absoluteString ?? ""
         ]
         guard let data = try? JSONSerialization.data(withJSONObject: status) else { return .serverError() }
         return HTTPResponse(statusCode: 200, body: data, contentType: "application/json")
@@ -163,9 +239,7 @@ final class LocalNetworkServer: ObservableObject {
         headers += "Connection: close\r\n"
         headers += "\r\n"
 
-        let headerData = headers.data(using: .utf8) ?? Data()
-        let fullData = headerData + response.body
-
+        let fullData = (headers.data(using: .utf8) ?? Data()) + response.body
         connection.send(content: fullData, completion: .contentProcessed { _ in
             connection.cancel()
         })
@@ -174,17 +248,20 @@ final class LocalNetworkServer: ObservableObject {
 
 // MARK: - iOS Client
 
+@MainActor
 final class LocalNetworkClient {
     static let shared = LocalNetworkClient()
 
     private var macURL: URL?
+    private var discoveryTask: Task<Void, Never>?
 
     func setMacAddress(_ url: URL) {
         macURL = url
+        SettingsStore.shared.macServerURL = url.absoluteString
     }
 
     func postInstruction(_ instruction: Instruction) async throws {
-        guard let base = macURL else { throw NetworkError.noServerURL }
+        guard let base = resolvedBase() else { throw NetworkError.noServerURL }
         var request = URLRequest(url: base.appendingPathComponent("instructions"))
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -197,24 +274,164 @@ final class LocalNetworkClient {
     }
 
     func fetchStatus() async throws -> [String: Any] {
-        guard let base = macURL else { throw NetworkError.noServerURL }
+        guard let base = resolvedBase() else { throw NetworkError.noServerURL }
         let (data, _) = try await URLSession.shared.data(from: base.appendingPathComponent("status"))
         return (try? JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:]
     }
 
+    // MARK: - Auto-discover Mac
+
+    /// Tries all discovery methods in order: saved URL → iCloud file → subnet scan
+    @discardableResult
     func discoverMac() async -> URL? {
-        // Try common local addresses
-        let candidates = [
-            "http://localhost:\(Constants.Sync.localHTTPPort)",
-            "http://192.168.1.100:\(Constants.Sync.localHTTPPort)",
-        ]
-        for candidate in candidates {
-            if let url = URL(string: candidate),
-               let _ = try? await URLSession.shared.data(from: url.appendingPathComponent("ping")) {
-                return url
+        // 1. Try saved URL first (fastest)
+        let saved = SettingsStore.shared.macServerURL
+        if !saved.isEmpty, let url = URL(string: saved), await ping(url) {
+            macURL = url
+            return url
+        }
+
+        // 2. Try iCloud-published URL from Mac
+        if let url = await readMacURLFromiCloud(), await ping(url) {
+            macURL = url
+            SettingsStore.shared.macServerURL = url.absoluteString
+            return url
+        }
+
+        // 3. Scan subnet
+        if let url = await subnetScan() {
+            macURL = url
+            SettingsStore.shared.macServerURL = url.absoluteString
+            return url
+        }
+
+        return nil
+    }
+
+    /// Start background auto-discovery loop (iOS only)
+    func startAutoDiscovery() {
+        discoveryTask?.cancel()
+        discoveryTask = Task {
+            while !Task.isCancelled {
+                let currentURL = macURL
+                let needsDiscovery: Bool
+                if let url = currentURL {
+                    needsDiscovery = !(await ping(url))
+                } else {
+                    needsDiscovery = true
+                }
+                if needsDiscovery {
+                    await discoverMac()
+                }
+                try? await Task.sleep(nanoseconds: 15_000_000_000)
             }
         }
+    }
+
+    func stopAutoDiscovery() {
+        discoveryTask?.cancel()
+        discoveryTask = nil
+    }
+
+    // MARK: - Private helpers
+
+    private func resolvedBase() -> URL? {
+        if let url = macURL { return url }
+        let saved = SettingsStore.shared.macServerURL
+        if !saved.isEmpty, let url = URL(string: saved) {
+            macURL = url
+            return url
+        }
         return nil
+    }
+
+    private func ping(_ url: URL) async -> Bool {
+        var req = URLRequest(url: url.appendingPathComponent("ping"))
+        req.timeoutInterval = 3
+        return (try? await URLSession.shared.data(for: req)) != nil
+    }
+
+    private func readMacURLFromiCloud() async -> URL? {
+        guard let root = iCloudSyncEngine.shared.eonCodeRoot else { return nil }
+        let macInfoURL = root.appendingPathComponent("mac-server.json")
+        guard let data = try? await iCloudSyncEngine.shared.readData(from: macInfoURL),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: String],
+              let urlString = json["url"],
+              let url = URL(string: urlString)
+        else { return nil }
+
+        // Only trust if written recently (< 5 minutes)
+        if let ts = json["timestamp"], let date = ISO8601DateFormatter().date(from: ts),
+           Date().timeIntervalSince(date) > 300 {
+            return nil
+        }
+        return url
+    }
+
+    private func subnetScan() async -> URL? {
+        let base = localSubnetBase() ?? "192.168.1"
+        let port = Constants.Sync.localHTTPPort
+        let hosts = (1...254).map { "\(base).\($0)" }
+
+        for batch in hosts.chunkedInto(16) {
+            let results = await withTaskGroup(of: URL?.self) { group in
+                for host in batch {
+                    group.addTask {
+                        let url = URL(string: "http://\(host):\(port)")!
+                        var req = URLRequest(url: url.appendingPathComponent("ping"))
+                        req.timeoutInterval = 1
+                        if let (data, _) = try? await URLSession.shared.data(for: req),
+                           let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                           json["pong"] as? Bool == true {
+                            return url
+                        }
+                        return nil
+                    }
+                }
+                var found: [URL] = []
+                for await result in group {
+                    if let url = result { found.append(url) }
+                }
+                return found
+            }
+            if let found = results.first { return found }
+        }
+        return nil
+    }
+
+    private func localSubnetBase() -> String? {
+        var ifaddr: UnsafeMutablePointer<ifaddrs>?
+        guard getifaddrs(&ifaddr) == 0 else { return nil }
+        defer { freeifaddrs(ifaddr) }
+
+        var ptr = ifaddr
+        while let current = ptr {
+            let flags = Int32(current.pointee.ifa_flags)
+            if (flags & IFF_UP) != 0, (flags & IFF_LOOPBACK) == 0,
+               current.pointee.ifa_addr.pointee.sa_family == UInt8(AF_INET),
+               let name = current.pointee.ifa_name.map({ String(cString: $0) }),
+               name.hasPrefix("en") {
+                var hostname = [CChar](repeating: 0, count: Int(NI_MAXHOST))
+                getnameinfo(current.pointee.ifa_addr,
+                            socklen_t(current.pointee.ifa_addr.pointee.sa_len),
+                            &hostname, socklen_t(hostname.count), nil, 0, NI_NUMERICHOST)
+                let ip = String(cString: hostname)
+                let parts = ip.split(separator: ".")
+                if parts.count == 4 {
+                    return "\(parts[0]).\(parts[1]).\(parts[2])"
+                }
+            }
+            ptr = current.pointee.ifa_next
+        }
+        return nil
+    }
+}
+
+// MARK: - Array chunking (local, avoids conflict with WorkerPool extension)
+
+private extension Array {
+    func chunkedInto(_ size: Int) -> [[Element]] {
+        stride(from: 0, to: count, by: size).map { Array(self[$0..<Swift.min($0 + size, count)]) }
     }
 }
 
@@ -239,11 +456,9 @@ struct HTTPResponse {
     static func notFound() -> HTTPResponse {
         HTTPResponse(statusCode: 404, body: "{\"error\":\"not found\"}".data(using: .utf8)!, contentType: "application/json")
     }
-
     static func badRequest() -> HTTPResponse {
         HTTPResponse(statusCode: 400, body: "{\"error\":\"bad request\"}".data(using: .utf8)!, contentType: "application/json")
     }
-
     static func serverError() -> HTTPResponse {
         HTTPResponse(statusCode: 500, body: "{\"error\":\"server error\"}".data(using: .utf8)!, contentType: "application/json")
     }

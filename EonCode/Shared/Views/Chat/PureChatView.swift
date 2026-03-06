@@ -1,10 +1,152 @@
 import SwiftUI
 
+// MARK: - Cost Badge (reusable across chat views)
+
+struct CostBadge: View {
+    let costSEK: Double
+    let usage: TokenUsage?
+    let model: ClaudeModel?
+
+    @State private var showDetail = false
+
+    private func formatSEK(_ v: Double) -> String {
+        v < 0.001 ? "< 0.001 kr" : String(format: "%.3f kr", v)
+    }
+
+    var body: some View {
+        Button {
+            showDetail.toggle()
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "dollarsign.circle")
+                    .font(.system(size: 9))
+                Text(formatSEK(costSEK))
+                    .font(.system(size: 10, design: .monospaced))
+            }
+            .foregroundColor(.secondary.opacity(0.55))
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(Color.white.opacity(showDetail ? 0.08 : 0.0))
+            .cornerRadius(5)
+        }
+        .buttonStyle(.plain)
+        .popover(isPresented: $showDetail) {
+            CostDetailPopover(costSEK: costSEK, usage: usage, model: model)
+        }
+    }
+}
+
+struct CostDetailPopover: View {
+    let costSEK: Double
+    let usage: TokenUsage?
+    let model: ClaudeModel?
+
+    private func formatSEK(_ v: Double) -> String {
+        v < 0.001 ? "< 0.001 kr" : String(format: "%.4f kr", v)
+    }
+    private func formatUSD(_ v: Double) -> String {
+        v < 0.00001 ? "< $0.00001" : String(format: "$%.5f", v)
+    }
+
+    var usd: Double {
+        guard let usage, let model else { return 0 }
+        let (u, _) = CostCalculator.shared.calculate(usage: usage, model: model)
+        return u
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 6) {
+                Image(systemName: "dollarsign.circle.fill")
+                    .foregroundColor(.accentEon)
+                Text("Kostnad för detta svar")
+                    .font(.system(size: 13, weight: .semibold))
+            }
+
+            Divider().opacity(0.2)
+
+            // Main cost
+            HStack {
+                Text("Kostnad")
+                    .font(.system(size: 12))
+                    .foregroundColor(.secondary)
+                Spacer()
+                VStack(alignment: .trailing, spacing: 1) {
+                    Text(formatSEK(costSEK))
+                        .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                    Text(formatUSD(usd))
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundColor(.secondary)
+                }
+            }
+
+            if let usage {
+                Divider().opacity(0.15)
+
+                // Token breakdown
+                Group {
+                    tokenRow("Indata-tokens", value: usage.inputTokens, color: .blue)
+                    if let cache = usage.cacheReadInputTokens, cache > 0 {
+                        tokenRow("Varav cache-läsning", value: cache, color: .green, note: "−90%")
+                    }
+                    if let cacheWrite = usage.cacheCreationInputTokens, cacheWrite > 0 {
+                        tokenRow("Cache-skrivning", value: cacheWrite, color: .orange)
+                    }
+                    tokenRow("Utdata-tokens", value: usage.outputTokens, color: .purple)
+                    tokenRow("Totalt", value: usage.inputTokens + usage.outputTokens, color: .primary)
+                }
+            }
+
+            if let model {
+                Divider().opacity(0.15)
+                HStack {
+                    Text("Modell")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                    Spacer()
+                    Text(model.displayName)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.accentEon)
+                }
+            }
+        }
+        .padding(14)
+        .frame(minWidth: 220)
+        .background(Color.chatBackground)
+        .preferredColorScheme(.dark)
+    }
+
+    @ViewBuilder
+    private func tokenRow(_ label: String, value: Int, color: Color, note: String? = nil) -> some View {
+        HStack {
+            Circle()
+                .fill(color.opacity(0.7))
+                .frame(width: 6, height: 6)
+            Text(label)
+                .font(.system(size: 11))
+                .foregroundColor(.secondary)
+            if let note {
+                Text(note)
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundColor(.green)
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 1)
+                    .background(Color.green.opacity(0.12))
+                    .cornerRadius(3)
+            }
+            Spacer()
+            Text("\(value)")
+                .font(.system(size: 11, design: .monospaced))
+        }
+    }
+}
+
 // MARK: - Pure Chat View (ChatGPT/Claude.ai-style, no project context)
 
 struct PureChatView: View {
     @StateObject private var manager = ChatManager.shared
     @StateObject private var memoryManager = MemoryManager.shared
+    @StateObject private var costTracker = CostTracker.shared
     @State private var inputText = ""
     @State private var selectedImages: [Data] = []
     @State private var isShowingImagePicker = false
@@ -14,13 +156,13 @@ struct PureChatView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Top bar
-            chatTopBar
+            // Model picker bar (compact, no duplicate new-chat button)
+            modelPickerBar
 
             Divider().opacity(0.15)
 
             if let conv = conversation {
-                // Messages
+                // Messages scroll — input bar pinned via safeAreaInset
                 ScrollViewReader { proxy in
                     ScrollView {
                         LazyVStack(spacing: 12) {
@@ -35,23 +177,28 @@ struct PureChatView: View {
                         }
                         .padding()
                     }
+                    .safeAreaInset(edge: .bottom, spacing: 0) {
+                        VStack(spacing: 0) {
+                            Divider().opacity(0.15)
+                            chatInputBar
+                        }
+                        .background(Color.chatBackground)
+                    }
                     .onAppear { scrollProxy = proxy }
-                    .onChange(of: conv.messages.count) { _ in
-                        scrollToBottom(proxy)
-                    }
-                    .onChange(of: manager.streamingText) { _ in
-                        scrollToBottom(proxy)
-                    }
+                    .onChange(of: conv.messages.count) { _ in scrollToBottom(proxy) }
+                    .onChange(of: manager.streamingText) { _ in scrollToBottom(proxy) }
                 }
             } else {
-                // Empty state
-                chatEmptyState
+                // Empty state with input at bottom
+                ZStack(alignment: .bottom) {
+                    chatEmptyState
+                    VStack(spacing: 0) {
+                        Divider().opacity(0.15)
+                        chatInputBar
+                    }
+                    .background(Color.chatBackground)
+                }
             }
-
-            Divider().opacity(0.15)
-
-            // Input bar
-            chatInputBar
         }
         .background(Color.chatBackground)
         .onAppear {
@@ -61,57 +208,81 @@ struct PureChatView: View {
         }
     }
 
-    // MARK: - Top bar
+    // MARK: - Model picker bar (ChatGPT-style topbar)
 
-    var chatTopBar: some View {
+    var modelPickerBar: some View {
         HStack(spacing: 12) {
             // Model picker
             if let conv = conversation {
                 Menu {
                     ForEach(ClaudeModel.allCases) { model in
-                        Button(model.displayName) {
+                        Button {
                             if let idx = manager.conversations.firstIndex(where: { $0.id == conv.id }) {
                                 manager.conversations[idx].model = model
                                 manager.activeConversation?.model = model
                             }
+                        } label: {
+                            HStack {
+                                Text(model.displayName)
+                                if model == conv.model {
+                                    Image(systemName: "checkmark")
+                                }
+                            }
                         }
                     }
                 } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "cpu")
-                            .font(.system(size: 11))
+                    HStack(spacing: 5) {
                         Text(conv.model.displayName)
-                            .font(.system(size: 12, weight: .medium))
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(.primary)
                         Image(systemName: "chevron.down")
-                            .font(.system(size: 9))
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundColor(.secondary)
                     }
-                    .foregroundColor(.secondary)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(Color.white.opacity(0.06))
-                    .cornerRadius(8)
                 }
                 .buttonStyle(.plain)
+            } else {
+                Text("Chatt")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.primary)
             }
 
             Spacer()
 
-            // Total cost
-            if let conv = conversation, conv.totalCostSEK > 0 {
-                Text(CostCalculator.shared.formatSEK(conv.totalCostSEK))
-                    .font(.system(size: 12, design: .monospaced))
-                    .foregroundColor(.secondary.opacity(0.6))
+            // Live cost display
+            HStack(spacing: 10) {
+                if costTracker.lastRequestSEK > 0 {
+                    HStack(spacing: 3) {
+                        Image(systemName: "arrow.up.circle")
+                            .font(.system(size: 9))
+                        Text(costTracker.formattedLast().components(separatedBy: " (").first ?? "")
+                            .font(.system(size: 11, design: .monospaced))
+                    }
+                    .foregroundColor(.secondary.opacity(0.55))
+                }
+                if costTracker.sessionSEK > 0 {
+                    HStack(spacing: 3) {
+                        Image(systemName: "clock")
+                            .font(.system(size: 9))
+                        Text(costTracker.formattedSession().components(separatedBy: " (").first ?? "")
+                            .font(.system(size: 11, design: .monospaced))
+                    }
+                    .foregroundColor(.secondary.opacity(0.4))
+                }
             }
 
-            // New chat
+            // New chat button
             Button {
                 _ = manager.newConversation()
             } label: {
                 Image(systemName: "square.and.pencil")
                     .font(.system(size: 14))
-                    .foregroundColor(.accentEon)
+                    .foregroundColor(.secondary)
+                    .frame(width: 28, height: 28)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .help("Ny chatt")
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
@@ -220,7 +391,13 @@ struct PureChatView: View {
     // MARK: - Send
 
     private func sendMessage() {
-        guard !inputText.isBlank, var conv = conversation else { return }
+        guard !inputText.isBlank else { return }
+        // Create a new conversation if none is active
+        if manager.activeConversation == nil {
+            _ = manager.newConversation()
+        }
+        guard var conv = manager.activeConversation else { return }
+
         let text = inputText
         let images = selectedImages
         inputText = ""
@@ -228,6 +405,13 @@ struct PureChatView: View {
 
         Task {
             try? await manager.send(text: text, images: images, in: &conv) { _ in }
+            // Sync back so the view reflects the updated conversation
+            await MainActor.run {
+                manager.activeConversation = conv
+                if let idx = manager.conversations.firstIndex(where: { $0.id == conv.id }) {
+                    manager.conversations[idx] = conv
+                }
+            }
         }
     }
 
@@ -236,7 +420,11 @@ struct PureChatView: View {
             if manager.isStreaming { proxy.scrollTo("streaming", anchor: .bottom) }
             return
         }
-        proxy.scrollTo(manager.isStreaming ? "streaming" : last.id, anchor: .bottom)
+        if manager.isStreaming {
+            proxy.scrollTo("streaming", anchor: .bottom)
+        } else {
+            proxy.scrollTo(last.id, anchor: .bottom)
+        }
     }
 }
 
@@ -292,14 +480,13 @@ struct PureChatBubble: View {
                         .textSelection(.enabled)
                 }
 
-                // Cost + TTS
-                HStack(spacing: 8) {
-                    if let cost = message.costSEK, cost > 0 {
-                        Text(CostCalculator.shared.formatSEK(cost))
-                            .font(.system(size: 10, design: .monospaced))
-                            .foregroundColor(.secondary.opacity(0.5))
-                    }
-                    if !isUser {
+                // Cost + tokens + TTS
+                if !isUser {
+                    HStack(spacing: 8) {
+                        if let cost = message.costSEK, cost > 0 {
+                            CostBadge(costSEK: cost, usage: message.tokenUsage, model: message.model)
+                        }
+                        Spacer(minLength: 0)
                         Button {
                             if isSpeaking {
                                 ElevenLabsClient.shared.stop()
@@ -314,7 +501,7 @@ struct PureChatBubble: View {
                         } label: {
                             Image(systemName: isSpeaking ? "stop.circle" : "speaker.wave.2")
                                 .font(.system(size: 11))
-                                .foregroundColor(.secondary.opacity(0.5))
+                                .foregroundColor(.secondary.opacity(0.4))
                         }
                         .buttonStyle(.plain)
                     }
@@ -324,6 +511,37 @@ struct PureChatBubble: View {
             if !isUser { Spacer(minLength: 40) }
         }
     }
+}
+
+// MARK: - Previews
+
+#Preview("PureChatView") {
+    PureChatView()
+        .frame(width: 400, height: 600)
+        .preferredColorScheme(.dark)
+}
+
+#Preview("PureChatBubble – user") {
+    let msg = PureChatMessage(role: .user, content: "Vad är SwiftUI?")
+    return PureChatBubble(message: msg)
+        .padding()
+        .background(Color.black)
+        .preferredColorScheme(.dark)
+}
+
+#Preview("PureChatBubble – assistant") {
+    let msg = PureChatMessage(role: .assistant, content: "SwiftUI är Apples deklarativa UI-ramverk för att bygga appar på alla Apple-plattformar med Swift-kod.")
+    return PureChatBubble(message: msg)
+        .padding()
+        .background(Color.black)
+        .preferredColorScheme(.dark)
+}
+
+#Preview("MarkdownTextView") {
+    MarkdownTextView(text: "**Hej!** Här är ett kodexempel:\n\n```swift\nlet x = 42\nprint(x)\n```\n\nOch lite *kursiv* text.")
+        .padding()
+        .background(Color.black)
+        .preferredColorScheme(.dark)
 }
 
 // MARK: - Simple Markdown text renderer (reuses existing MarkdownPreview patterns)

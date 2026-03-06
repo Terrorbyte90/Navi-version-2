@@ -8,13 +8,14 @@ struct KeychainSync {
     // All keys with iCloud sync enabled (via kSecAttrSynchronizable)
     static func saveSync(key: String, value: String) throws {
         let data = Data(value.utf8)
+        // kSecAttrAccessibleAfterFirstUnlock (without ThisDeviceOnly) enables iCloud Keychain sync
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: Constants.Keychain.service,
             kSecAttrAccount as String: key,
             kSecValueData as String: data,
             kSecAttrSynchronizable as String: true,
-            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock
         ]
         SecItemDelete(query as CFDictionary)
         let status = SecItemAdd(query as CFDictionary, nil)
@@ -37,5 +38,15 @@ struct KeychainSync {
               let data = result as? Data
         else { return nil }
         return String(data: data, encoding: .utf8)
+    }
+
+    static func deleteSync(key: String) {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: Constants.Keychain.service,
+            kSecAttrAccount as String: key,
+            kSecAttrSynchronizable as String: true
+        ]
+        SecItemDelete(query as CFDictionary)
     }
 }

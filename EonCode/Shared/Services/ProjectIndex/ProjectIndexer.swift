@@ -144,7 +144,7 @@ final class FileWatcher {
 
         source = DispatchSource.makeFileSystemObjectSource(
             fileDescriptor: fd,
-            eventMask: [.write, .rename, .delete, .create],
+            eventMask: [.write, .rename, .delete, .attrib],
             queue: .global(qos: .utility)
         )
 

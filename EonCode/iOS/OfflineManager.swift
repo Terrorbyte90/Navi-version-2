@@ -17,6 +17,11 @@ final class OfflineManager: ObservableObject {
         monitor.pathUpdateHandler = { [weak self] path in
             Task { @MainActor in
                 self?.isOnline = path.status == .satisfied
+                if path.status == .satisfied {
+                    await self?.checkMacReachability()
+                } else {
+                    self?.macReachable = false
+                }
             }
         }
         monitor.start(queue: queue)
@@ -27,15 +32,28 @@ final class OfflineManager: ObservableObject {
     }
 
     func checkMacReachability() async {
-        guard !SettingsStore.shared.macServerURL.isEmpty else { return }
-        if let url = URL(string: SettingsStore.shared.macServerURL) {
+        // Try saved URL first
+        if !SettingsStore.shared.macServerURL.isEmpty,
+           let url = URL(string: SettingsStore.shared.macServerURL) {
             LocalNetworkClient.shared.setMacAddress(url)
-            macReachable = (try? await LocalNetworkClient.shared.fetchStatus()) != nil
+            if (try? await LocalNetworkClient.shared.fetchStatus()) != nil {
+                macReachable = true
+                return
+            }
+        }
+
+        // Auto-discover Mac if saved URL failed or is missing
+        if let url = await LocalNetworkClient.shared.discoverMac() {
+            LocalNetworkClient.shared.setMacAddress(url)
+            macReachable = true
+        } else {
+            macReachable = false
         }
     }
 
     var syncMethod: SyncMethod {
         if macReachable { return .localHTTP }
+        if PeerSyncEngine.shared.connectedPeer != nil { return .bonjour }
         if iCloudAvailable { return .iCloud }
         return .offline
     }

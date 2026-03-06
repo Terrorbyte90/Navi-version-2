@@ -27,7 +27,7 @@ final class ChatManager: ObservableObject {
 
     // MARK: - New conversation
 
-    func newConversation(model: ClaudeModel = SettingsStore.shared.defaultModel) -> ChatConversation {
+    func newConversation(model: ClaudeModel = .sonnet45) -> ChatConversation {
         let conv = ChatConversation(model: model)
         conversations.insert(conv, at: 0)
         activeConversation = conv
@@ -88,6 +88,7 @@ final class ChatManager: ObservableObject {
             let (_, sek) = CostCalculator.shared.calculate(usage: usage, model: conversation.model)
             costSEK = sek
             conversation.totalCostSEK += sek
+            CostTracker.shared.record(usage: usage, model: conversation.model)
         } else {
             costSEK = 0
         }
@@ -117,10 +118,12 @@ final class ChatManager: ObservableObject {
 
         // Extract memories after substantial conversations
         if conversation.messages.count >= 6 {
+            let messages = conversation.messages
+            let convId = conversation.id
             Task {
                 await MemoryManager.shared.extractMemories(
-                    from: conversation.messages,
-                    conversationId: conversation.id
+                    from: messages,
+                    conversationId: convId
                 )
             }
         }

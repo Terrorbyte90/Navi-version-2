@@ -3,7 +3,7 @@ options:
   bundleIdPrefix: com.eoncode
   deploymentTarget:
     iOS: "17.0"
-    macOS: "14.0"
+    macOS: "15.0"
   xcodeVersion: "15.0"
   createIntermediateGroups: true
   defaultConfig: Debug
@@ -66,7 +66,7 @@ targets:
   EonCode-macOS:
     type: application
     platform: macOS
-    deploymentTarget: "14.0"
+    deploymentTarget: "15.0"
     sources:
       - path: EonCode/Shared
         excludes:

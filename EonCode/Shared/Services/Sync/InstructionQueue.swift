@@ -25,10 +25,8 @@ final class InstructionQueue: ObservableObject {
             try? await sync.write(instruction, to: url)
         }
 
-        // Also try local HTTP if iCloud not available
-        if let macURL = LocalNetworkClient.shared as? LocalNetworkClient {
-            try? await macURL.postInstruction(instruction)
-        }
+        // Also try local HTTP for lower latency when Mac is on same network
+        try? await LocalNetworkClient.shared.postInstruction(instruction)
 
         pendingCount += 1
         NotificationCenter.default.post(name: .instructionEnqueued, object: instruction)
@@ -75,14 +73,14 @@ final class InstructionQueue: ObservableObject {
         isProcessing = true
         defer { isProcessing = false }
 
-        let executor = ToolExecutor()
         let project = await ProjectStore.shared.project(by: instr.projectID)
+        // Use the project's active model, fall back to settings default, then Sonnet
+        let model = project?.activeModel ?? SettingsStore.shared.defaultModel
 
         do {
-            // Route to agent engine
             var conversation = Conversation(
                 projectID: instr.projectID ?? UUID(),
-                model: project?.activeModel ?? .haiku
+                model: model
             )
 
             let agentTask = AgentTask(
