@@ -91,7 +91,7 @@ struct PlanView: View {
                     .foregroundColor(.secondary)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 5)
-                    .background(Color.white.opacity(0.06))
+                    .background(Color.white.opacity(0.05))
                     .cornerRadius(8)
                 }
                 .buttonStyle(.plain)
@@ -118,7 +118,7 @@ struct PlanView: View {
                     .foregroundColor(.secondary)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 5)
-                    .background(Color.white.opacity(0.06))
+                    .background(Color.white.opacity(0.05))
                     .cornerRadius(8)
                 }
                 .buttonStyle(.plain)
@@ -202,7 +202,7 @@ struct PlanView: View {
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 10)
-                                .background(Color.white.opacity(0.06))
+                                .background(Color.white.opacity(0.05))
                                 .cornerRadius(10)
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 10)
@@ -242,23 +242,47 @@ struct PlanView: View {
     // MARK: - Input bar
 
     var planInputBar: some View {
-        HStack(spacing: 10) {
-            TextField("Beskriv din idé eller ställ en fråga…", text: $inputText, axis: .vertical)
-                .lineLimit(1...6)
+        HStack(alignment: .bottom, spacing: 0) {
+            TextField("Beskriv din idé eller ställ en fråga...", text: $inputText, axis: .vertical)
+                .lineLimit(1...8)
                 .textFieldStyle(.plain)
-                .font(.system(size: 14))
+                .font(.system(size: 15))
                 .onSubmit { sendMessage() }
+                .padding(.leading, 12)
+                .padding(.vertical, 8)
 
             Button(action: sendMessage) {
-                Image(systemName: manager.isStreaming ? "stop.fill" : "arrow.up.circle.fill")
-                    .font(.system(size: 22))
-                    .foregroundColor(inputText.isBlank && !manager.isStreaming ? .secondary : .accentEon)
+                if manager.isStreaming {
+                    Image(systemName: "stop.fill")
+                        .font(.system(size: 16))
+                        .foregroundColor(.primary)
+                        .frame(width: 30, height: 30)
+                } else {
+                    Image(systemName: "arrow.up")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(inputText.isBlank ? .secondary.opacity(0.3) : .black)
+                        .frame(width: 30, height: 30)
+                        .background(
+                            Circle()
+                                .fill(inputText.isBlank ? Color.clear : Color.white)
+                        )
+                }
             }
             .buttonStyle(.plain)
             .disabled(inputText.isBlank && !manager.isStreaming)
+            .padding(.trailing, 4)
         }
+        .padding(.vertical, 4)
+        .background(
+            RoundedRectangle(cornerRadius: 24)
+                .fill(Color.inputBackground)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 24)
+                        .strokeBorder(Color.inputBorder, lineWidth: 1)
+                )
+        )
         .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.vertical, 10)
     }
 
     // MARK: - Send
@@ -369,7 +393,7 @@ struct ExtractedPlanCard: View {
                                                         .foregroundColor(.secondary)
                                                         .padding(.horizontal, 6)
                                                         .padding(.vertical, 1)
-                                                        .background(Color.white.opacity(0.06))
+                                                        .background(Color.white.opacity(0.05))
                                                         .cornerRadius(4)
                                                 }
                                             }

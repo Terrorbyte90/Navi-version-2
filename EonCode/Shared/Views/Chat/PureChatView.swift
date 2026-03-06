@@ -19,15 +19,15 @@ struct CostBadge: View {
         } label: {
             HStack(spacing: 4) {
                 Image(systemName: "dollarsign.circle")
-                    .font(.system(size: 9))
+                    .font(.system(size: 10))
                 Text(formatSEK(costSEK))
-                    .font(.system(size: 10, design: .monospaced))
+                    .font(.system(size: 11, design: .monospaced))
             }
-            .foregroundColor(.secondary.opacity(0.55))
+            .foregroundColor(.secondary.opacity(0.45))
             .padding(.horizontal, 6)
-            .padding(.vertical, 2)
-            .background(Color.white.opacity(showDetail ? 0.08 : 0.0))
-            .cornerRadius(5)
+            .padding(.vertical, 3)
+            .background(Color.white.opacity(showDetail ? 0.06 : 0.0))
+            .cornerRadius(6)
         }
         .buttonStyle(.plain)
         .popover(isPresented: $showDetail) {
@@ -59,35 +59,33 @@ struct CostDetailPopover: View {
             HStack(spacing: 6) {
                 Image(systemName: "dollarsign.circle.fill")
                     .foregroundColor(.accentEon)
-                Text("Kostnad för detta svar")
-                    .font(.system(size: 13, weight: .semibold))
+                Text("Kostnad")
+                    .font(.system(size: 14, weight: .semibold))
             }
 
-            Divider().opacity(0.2)
+            Divider().opacity(0.12)
 
-            // Main cost
             HStack {
                 Text("Kostnad")
-                    .font(.system(size: 12))
+                    .font(.system(size: 13))
                     .foregroundColor(.secondary)
                 Spacer()
                 VStack(alignment: .trailing, spacing: 1) {
                     Text(formatSEK(costSEK))
-                        .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                        .font(.system(size: 14, weight: .semibold, design: .monospaced))
                     Text(formatUSD(usd))
-                        .font(.system(size: 10, design: .monospaced))
+                        .font(.system(size: 11, design: .monospaced))
                         .foregroundColor(.secondary)
                 }
             }
 
             if let usage {
-                Divider().opacity(0.15)
+                Divider().opacity(0.12)
 
-                // Token breakdown
                 Group {
                     tokenRow("Indata-tokens", value: usage.inputTokens, color: .blue)
                     if let cache = usage.cacheReadInputTokens, cache > 0 {
-                        tokenRow("Varav cache-läsning", value: cache, color: .green, note: "−90%")
+                        tokenRow("Cache-läsning", value: cache, color: .green, note: "-90%")
                     }
                     if let cacheWrite = usage.cacheCreationInputTokens, cacheWrite > 0 {
                         tokenRow("Cache-skrivning", value: cacheWrite, color: .orange)
@@ -98,50 +96,39 @@ struct CostDetailPopover: View {
             }
 
             if let model {
-                Divider().opacity(0.15)
+                Divider().opacity(0.12)
                 HStack {
-                    Text("Modell")
-                        .font(.system(size: 11))
-                        .foregroundColor(.secondary)
+                    Text("Modell").font(.system(size: 12)).foregroundColor(.secondary)
                     Spacer()
-                    Text(model.displayName)
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(.accentEon)
+                    Text(model.displayName).font(.system(size: 12, weight: .medium)).foregroundColor(.accentEon)
                 }
             }
         }
-        .padding(14)
-        .frame(minWidth: 220)
-        .background(Color.chatBackground)
+        .padding(16)
+        .frame(minWidth: 240)
+        .background(Color.sidebarBackground)
         .preferredColorScheme(.dark)
     }
 
     @ViewBuilder
     private func tokenRow(_ label: String, value: Int, color: Color, note: String? = nil) -> some View {
         HStack {
-            Circle()
-                .fill(color.opacity(0.7))
-                .frame(width: 6, height: 6)
-            Text(label)
-                .font(.system(size: 11))
-                .foregroundColor(.secondary)
+            Circle().fill(color.opacity(0.7)).frame(width: 6, height: 6)
+            Text(label).font(.system(size: 12)).foregroundColor(.secondary)
             if let note {
                 Text(note)
-                    .font(.system(size: 9, weight: .semibold))
+                    .font(.system(size: 10, weight: .semibold))
                     .foregroundColor(.green)
-                    .padding(.horizontal, 4)
-                    .padding(.vertical, 1)
-                    .background(Color.green.opacity(0.12))
-                    .cornerRadius(3)
+                    .padding(.horizontal, 4).padding(.vertical, 1)
+                    .background(Color.green.opacity(0.12)).cornerRadius(3)
             }
             Spacer()
-            Text("\(value)")
-                .font(.system(size: 11, design: .monospaced))
+            Text("\(value)").font(.system(size: 12, design: .monospaced))
         }
     }
 }
 
-// MARK: - Pure Chat View (ChatGPT/Claude.ai-style, no project context)
+// MARK: - Pure Chat View (ChatGPT style)
 
 struct PureChatView: View {
     @StateObject private var manager = ChatManager.shared
@@ -156,13 +143,12 @@ struct PureChatView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Model picker bar — macOS only; iOS uses the top nav bar in ContentView
             macModelBar
 
             if let conv = conversation {
                 ScrollViewReader { proxy in
                     ScrollView {
-                        LazyVStack(spacing: 12) {
+                        LazyVStack(spacing: 0) {
                             ForEach(conv.messages) { msg in
                                 PureChatBubble(message: msg)
                                     .id(msg.id)
@@ -172,14 +158,11 @@ struct PureChatView: View {
                                     .id("streaming")
                             }
                         }
-                        .padding()
+                        .padding(.vertical, 16)
                     }
                     .safeAreaInset(edge: .bottom, spacing: 0) {
-                        VStack(spacing: 0) {
-                            Divider().opacity(0.15)
-                            chatInputBar
-                        }
-                        .background(Color.chatBackground)
+                        chatInputBar
+                            .background(Color.chatBackground)
                     }
                     .onAppear { scrollProxy = proxy }
                     .onChange(of: conv.messages.count) { _ in scrollToBottom(proxy) }
@@ -188,11 +171,8 @@ struct PureChatView: View {
             } else {
                 ZStack(alignment: .bottom) {
                     chatEmptyState
-                    VStack(spacing: 0) {
-                        Divider().opacity(0.15)
-                        chatInputBar
-                    }
-                    .background(Color.chatBackground)
+                    chatInputBar
+                        .background(Color.chatBackground)
                 }
             }
         }
@@ -204,21 +184,16 @@ struct PureChatView: View {
         }
     }
 
-    // MARK: - macOS-only model bar
-
     @ViewBuilder
     var macModelBar: some View {
         #if os(macOS)
         modelPickerBar
-        Divider().opacity(0.15)
+        Divider().opacity(0.08)
         #endif
     }
 
-    // MARK: - Model picker bar (macOS)
-
     var modelPickerBar: some View {
         HStack(spacing: 12) {
-            // Model picker
             if let conv = conversation {
                 Menu {
                     ForEach(ClaudeModel.allCases) { model in
@@ -230,16 +205,14 @@ struct PureChatView: View {
                         } label: {
                             HStack {
                                 Text(model.displayName)
-                                if model == conv.model {
-                                    Image(systemName: "checkmark")
-                                }
+                                if model == conv.model { Image(systemName: "checkmark") }
                             }
                         }
                     }
                 } label: {
                     HStack(spacing: 5) {
                         Text(conv.model.displayName)
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(.system(size: 15, weight: .semibold))
                             .foregroundColor(.primary)
                         Image(systemName: "chevron.down")
                             .font(.system(size: 10, weight: .semibold))
@@ -249,42 +222,30 @@ struct PureChatView: View {
                 .buttonStyle(.plain)
             } else {
                 Text("Chatt")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(size: 15, weight: .semibold))
                     .foregroundColor(.primary)
             }
 
             Spacer()
 
-            // Live cost display
             HStack(spacing: 10) {
                 if costTracker.lastRequestSEK > 0 {
-                    HStack(spacing: 3) {
-                        Image(systemName: "arrow.up.circle")
-                            .font(.system(size: 9))
-                        Text(costTracker.formattedLast().components(separatedBy: " (").first ?? "")
-                            .font(.system(size: 11, design: .monospaced))
-                    }
-                    .foregroundColor(.secondary.opacity(0.55))
+                    Text(costTracker.formattedLast().components(separatedBy: " (").first ?? "")
+                        .font(.system(size: 12, design: .monospaced))
+                        .foregroundColor(.secondary.opacity(0.4))
                 }
                 if costTracker.sessionSEK > 0 {
-                    HStack(spacing: 3) {
-                        Image(systemName: "clock")
-                            .font(.system(size: 9))
-                        Text(costTracker.formattedSession().components(separatedBy: " (").first ?? "")
-                            .font(.system(size: 11, design: .monospaced))
-                    }
-                    .foregroundColor(.secondary.opacity(0.4))
+                    Text(costTracker.formattedSession().components(separatedBy: " (").first ?? "")
+                        .font(.system(size: 12, design: .monospaced))
+                        .foregroundColor(.secondary.opacity(0.3))
                 }
             }
 
-            // New chat button
-            Button {
-                _ = manager.newConversation()
-            } label: {
+            Button { _ = manager.newConversation() } label: {
                 Image(systemName: "square.and.pencil")
-                    .font(.system(size: 14))
+                    .font(.system(size: 15))
                     .foregroundColor(.secondary)
-                    .frame(width: 28, height: 28)
+                    .frame(width: 30, height: 30)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -294,33 +255,33 @@ struct PureChatView: View {
         .padding(.vertical, 10)
     }
 
-    // MARK: - Empty state
-
     var chatEmptyState: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: 24) {
             Spacer()
-            Image(systemName: "bubble.left.and.bubble.right")
-                .font(.system(size: 48))
-                .foregroundColor(.accentEon.opacity(0.4))
-            Text("Ny chatt")
-                .font(.system(size: 22, weight: .bold))
-            Text("Prata direkt med Claude — utan projektkontext.")
-                .font(.system(size: 14))
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
-            GlassButton("Starta ny chatt", icon: "plus", isPrimary: true) {
-                _ = manager.newConversation()
+            VStack(spacing: 12) {
+                ZStack {
+                    Circle()
+                        .fill(Color.accentEon.opacity(0.1))
+                        .frame(width: 64, height: 64)
+                    Image(systemName: "sparkle")
+                        .font(.system(size: 28))
+                        .foregroundColor(.accentEon)
+                }
+                Text("EonCode")
+                    .font(.system(size: 26, weight: .bold))
+                Text("Hur kan jag hjälpa dig?")
+                    .font(.system(size: 15))
+                    .foregroundColor(.secondary)
             }
             Spacer()
         }
         .padding(40)
     }
 
-    // MARK: - Input bar
+    // MARK: - Input bar (ChatGPT style pill)
 
     var chatInputBar: some View {
         VStack(spacing: 0) {
-            // Image previews
             if !selectedImages.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
@@ -328,103 +289,98 @@ struct PureChatView: View {
                             ZStack(alignment: .topTrailing) {
                                 #if os(iOS)
                                 if let ui = UIImage(data: data) {
-                                    Image(uiImage: ui)
-                                        .resizable().scaledToFill()
+                                    Image(uiImage: ui).resizable().scaledToFill()
                                         .frame(width: 56, height: 56)
                                         .clipShape(RoundedRectangle(cornerRadius: 8))
                                 }
                                 #else
                                 if let ns = NSImage(data: data) {
-                                    Image(nsImage: ns)
-                                        .resizable().scaledToFill()
+                                    Image(nsImage: ns).resizable().scaledToFill()
                                         .frame(width: 56, height: 56)
                                         .clipShape(RoundedRectangle(cornerRadius: 8))
                                 }
                                 #endif
                                 Button { selectedImages.remove(at: idx) } label: {
                                     Image(systemName: "xmark.circle.fill")
+                                        .font(.system(size: 16))
                                         .foregroundColor(.white)
-                                        .background(Circle().fill(Color.black.opacity(0.4)))
+                                        .background(Circle().fill(Color.black.opacity(0.6)))
                                 }
                                 .buttonStyle(.plain)
                                 .offset(x: 4, y: -4)
                             }
                         }
                     }
-                    .padding(.horizontal, 14)
+                    .padding(.horizontal, 20)
                     .padding(.top, 8)
                 }
             }
 
-            HStack(alignment: .bottom, spacing: 8) {
-                // Image attach
+            HStack(alignment: .bottom, spacing: 0) {
                 Button { isShowingImagePicker = true } label: {
                     Image(systemName: "paperclip")
                         .font(.system(size: 16))
                         .foregroundColor(.secondary)
                         .frame(width: 32, height: 32)
-                        .contentShape(Rectangle())
+                        .contentShape(Circle())
                 }
                 .buttonStyle(.plain)
 
-                // Text input — TextField with axis: .vertical grows naturally, starts at 1 line
                 TextField("Meddelande", text: $inputText, axis: .vertical)
                     .font(.system(size: 15))
-                    .lineLimit(1...5)
+                    .lineLimit(1...8)
                     .textFieldStyle(.plain)
-                    .padding(.horizontal, 10)
                     .padding(.vertical, 8)
-                    .background(
-                        RoundedRectangle(cornerRadius: 18)
-                            .fill(Color.white.opacity(0.07))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 18)
-                                    .strokeBorder(Color.white.opacity(0.12), lineWidth: 0.5)
-                            )
-                    )
 
-                // Send / stop
                 Button(action: sendMessage) {
                     if manager.isStreaming {
                         Image(systemName: "stop.fill")
-                            .font(.system(size: 18))
-                            .foregroundColor(.accentEon)
-                            .frame(width: 32, height: 32)
+                            .font(.system(size: 16))
+                            .foregroundColor(.primary)
+                            .frame(width: 30, height: 30)
                     } else {
-                        Image(systemName: "arrow.up.circle.fill")
-                            .font(.system(size: 30))
-                            .foregroundColor(inputText.isBlank && selectedImages.isEmpty ? .secondary.opacity(0.3) : .accentEon)
+                        Image(systemName: "arrow.up")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(inputText.isBlank && selectedImages.isEmpty ? .secondary.opacity(0.3) : .black)
+                            .frame(width: 30, height: 30)
+                            .background(
+                                Circle()
+                                    .fill(inputText.isBlank && selectedImages.isEmpty ? Color.clear : Color.white)
+                            )
                     }
                 }
                 .buttonStyle(.plain)
                 .disabled(inputText.isBlank && selectedImages.isEmpty && !manager.isStreaming)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(
+                RoundedRectangle(cornerRadius: 24)
+                    .fill(Color.inputBackground)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 24)
+                            .strokeBorder(Color.inputBorder, lineWidth: 1)
+                    )
+            )
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
 
-            // Cost row
             if costTracker.lastRequestSEK > 0 || costTracker.sessionSEK > 0 {
                 HStack(spacing: 10) {
                     if costTracker.lastRequestSEK > 0 {
-                        HStack(spacing: 3) {
-                            Image(systemName: "arrow.up.circle").font(.system(size: 9))
-                            Text(costTracker.formattedLast().components(separatedBy: " (").first ?? "")
-                                .font(.system(size: 11, design: .monospaced))
-                        }
-                        .foregroundColor(.secondary.opacity(0.5))
+                        Text(costTracker.formattedLast().components(separatedBy: " (").first ?? "")
+                            .font(.system(size: 12, design: .monospaced))
+                            .foregroundColor(.secondary.opacity(0.4))
                     }
                     if costTracker.sessionSEK > 0 {
-                        HStack(spacing: 3) {
-                            Image(systemName: "clock").font(.system(size: 9))
-                            Text(costTracker.formattedSession().components(separatedBy: " (").first ?? "")
-                                .font(.system(size: 11, design: .monospaced))
-                        }
-                        .foregroundColor(.secondary.opacity(0.35))
+                        Text(costTracker.formattedSession().components(separatedBy: " (").first ?? "")
+                            .font(.system(size: 12, design: .monospaced))
+                            .foregroundColor(.secondary.opacity(0.3))
                     }
                     Spacer()
                 }
-                .padding(.horizontal, 14)
-                .padding(.bottom, 4)
+                .padding(.horizontal, 20)
+                .padding(.bottom, 6)
             }
         }
     }
@@ -433,7 +389,6 @@ struct PureChatView: View {
 
     private func sendMessage() {
         guard !inputText.isBlank || !selectedImages.isEmpty else { return }
-        // Create a new conversation if none is active
         if manager.activeConversation == nil {
             _ = manager.newConversation()
         }
@@ -445,13 +400,11 @@ struct PureChatView: View {
         selectedImages = []
 
         Task {
-            // Work on the conversation by ID to avoid stale-copy issues
             guard var conv = manager.conversations.first(where: { $0.id == convID })
                     ?? manager.activeConversation
             else { return }
 
             try? await manager.send(text: text, images: images, in: &conv) { _ in }
-            // Sync back
             await MainActor.run {
                 manager.activeConversation = conv
                 if let idx = manager.conversations.firstIndex(where: { $0.id == conv.id }) {
@@ -474,7 +427,7 @@ struct PureChatView: View {
     }
 }
 
-// MARK: - Chat bubble
+// MARK: - Chat bubble (ChatGPT style)
 
 struct PureChatBubble: View {
     let message: PureChatMessage
@@ -483,51 +436,44 @@ struct PureChatBubble: View {
     var isUser: Bool { message.role == .user }
 
     var body: some View {
-        HStack(alignment: .bottom, spacing: 8) {
-            if isUser { Spacer(minLength: 40) }
-
-            VStack(alignment: isUser ? .trailing : .leading, spacing: 4) {
-                // Images
-                if let imgs = message.imageData, !imgs.isEmpty {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack {
-                            ForEach(Array(imgs.enumerated()), id: \.offset) { _, data in
-                                #if os(iOS)
-                                if let ui = UIImage(data: data) {
-                                    Image(uiImage: ui).resizable().scaledToFit()
-                                        .frame(maxHeight: 200).cornerRadius(10)
-                                }
-                                #else
-                                if let ns = NSImage(data: data) {
-                                    Image(nsImage: ns).resizable().scaledToFit()
-                                        .frame(maxHeight: 200).cornerRadius(10)
-                                }
-                                #endif
-                            }
-                        }
+        if isUser {
+            HStack {
+                Spacer(minLength: 60)
+                VStack(alignment: .trailing, spacing: 4) {
+                    if let imgs = message.imageData, !imgs.isEmpty {
+                        imageRow(imgs)
                     }
-                }
-
-                // Text / Markdown
-                if isUser {
                     Text(message.content)
-                        .font(.system(size: 14))
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 10)
-                        .background(Color.accentEon.opacity(0.2))
-                        .cornerRadius(18)
-                        .textSelection(.enabled)
-                } else {
-                    MarkdownTextView(text: message.content)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 10)
-                        .background(Color.white.opacity(0.06))
-                        .cornerRadius(18)
+                        .font(.system(size: 15))
+                        .lineSpacing(3)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                        .background(RoundedRectangle(cornerRadius: 20).fill(Color.userBubble))
                         .textSelection(.enabled)
                 }
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 8)
+        } else {
+            HStack(alignment: .top, spacing: 12) {
+                ZStack {
+                    Circle()
+                        .fill(Color.accentEon.opacity(0.15))
+                        .frame(width: 28, height: 28)
+                    Image(systemName: "sparkle")
+                        .font(.system(size: 13))
+                        .foregroundColor(.accentEon)
+                }
+                .padding(.top, 2)
 
-                // Cost + tokens + TTS
-                if !isUser {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("EonCode")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.primary)
+
+                    MarkdownTextView(text: message.content)
+                        .textSelection(.enabled)
+
                     HStack(spacing: 8) {
                         if let cost = message.costSEK, cost > 0 {
                             CostBadge(costSEK: cost, usage: message.tokenUsage, model: message.model)
@@ -546,15 +492,38 @@ struct PureChatBubble: View {
                             }
                         } label: {
                             Image(systemName: isSpeaking ? "stop.circle" : "speaker.wave.2")
-                                .font(.system(size: 11))
-                                .foregroundColor(.secondary.opacity(0.4))
+                                .font(.system(size: 12))
+                                .foregroundColor(.secondary.opacity(0.35))
                         }
                         .buttonStyle(.plain)
                     }
                 }
-            }
 
-            if !isUser { Spacer(minLength: 40) }
+                Spacer(minLength: 20)
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
+        }
+    }
+
+    @ViewBuilder
+    private func imageRow(_ imgs: [Data]) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack {
+                ForEach(Array(imgs.enumerated()), id: \.offset) { _, data in
+                    #if os(iOS)
+                    if let ui = UIImage(data: data) {
+                        Image(uiImage: ui).resizable().scaledToFit()
+                            .frame(maxHeight: 200).cornerRadius(12)
+                    }
+                    #else
+                    if let ns = NSImage(data: data) {
+                        Image(nsImage: ns).resizable().scaledToFit()
+                            .frame(maxHeight: 200).cornerRadius(12)
+                    }
+                    #endif
+                }
+            }
         }
     }
 }
@@ -563,66 +532,52 @@ struct PureChatBubble: View {
 
 #Preview("PureChatView") {
     PureChatView()
-        .frame(width: 400, height: 600)
+        .frame(width: 500, height: 600)
         .preferredColorScheme(.dark)
 }
 
-#Preview("PureChatBubble – user") {
-    let msg = PureChatMessage(role: .user, content: "Vad är SwiftUI?")
-    return PureChatBubble(message: msg)
-        .padding()
-        .background(Color.black)
-        .preferredColorScheme(.dark)
-}
-
-#Preview("PureChatBubble – assistant") {
-    let msg = PureChatMessage(role: .assistant, content: "SwiftUI är Apples deklarativa UI-ramverk för att bygga appar på alla Apple-plattformar med Swift-kod.")
-    return PureChatBubble(message: msg)
-        .padding()
-        .background(Color.black)
-        .preferredColorScheme(.dark)
-}
-
-#Preview("MarkdownTextView") {
-    MarkdownTextView(text: "**Hej!** Här är ett kodexempel:\n\n```swift\nlet x = 42\nprint(x)\n```\n\nOch lite *kursiv* text.")
-        .padding()
-        .background(Color.black)
-        .preferredColorScheme(.dark)
-}
-
-// MARK: - Simple Markdown text renderer (reuses existing MarkdownPreview patterns)
+// MARK: - Markdown text renderer
 
 struct MarkdownTextView: View {
     let text: String
 
     var body: some View {
-        // Reuse the app's code block detection
         let blocks = parseBlocks(text)
         VStack(alignment: .leading, spacing: 8) {
             ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
                 switch block {
                 case .text(let t):
-                    Text(.init(t)) // AttributedString markdown
-                        .font(.system(size: 14))
+                    Text(.init(t))
+                        .font(.system(size: 15))
+                        .lineSpacing(4)
                         .fixedSize(horizontal: false, vertical: true)
                 case .code(let lang, let code):
                     VStack(alignment: .leading, spacing: 0) {
-                        if !lang.isEmpty {
-                            Text(lang)
-                                .font(.system(size: 10, weight: .medium))
-                                .foregroundColor(.secondary)
-                                .padding(.horizontal, 12)
-                                .padding(.top, 6)
+                        HStack {
+                            if !lang.isEmpty {
+                                Text(lang)
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundColor(.secondary)
+                            }
+                            Spacer()
                         }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .background(Color(red: 0.08, green: 0.08, blue: 0.08))
+
                         ScrollView(.horizontal, showsIndicators: false) {
                             Text(code)
-                                .font(.system(size: 12, design: .monospaced))
-                                .padding(12)
+                                .font(.system(size: 13, design: .monospaced))
+                                .padding(14)
                                 .textSelection(.enabled)
                         }
                     }
                     .background(Color.codeBackground)
-                    .cornerRadius(10)
+                    .cornerRadius(12)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .strokeBorder(Color.dividerColor, lineWidth: 1)
+                    )
                 }
             }
         }

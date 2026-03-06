@@ -325,7 +325,7 @@ struct RepoRow: View {
             .padding(.horizontal, 10).padding(.vertical, 8)
             .background(
                 RoundedRectangle(cornerRadius: 7)
-                    .fill(isSelected ? Color.accentEon.opacity(0.25) : Color.clear)
+                    .fill(isSelected ? Color.white.opacity(0.08) : Color.clear)
             )
         }
         .buttonStyle(.plain)
@@ -725,7 +725,7 @@ struct RepoWorkView: View {
                 .padding(.horizontal, 12).padding(.vertical, 5)
                 .background(
                     RoundedRectangle(cornerRadius: 7)
-                        .fill(selectedTab == idx ? Color.accentEon.opacity(0.3) : Color.clear)
+                        .fill(selectedTab == idx ? Color.white.opacity(0.08) : Color.clear)
                 )
         }
         .buttonStyle(.plain)

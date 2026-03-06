@@ -298,7 +298,7 @@ struct ContentView: View {
                     .foregroundColor(.accentEon)
                     .padding(.horizontal, 20)
                     .padding(.vertical, 12)
-                    .background(Color.accentEon.opacity(0.12))
+                    .background(Color.accentEon.opacity(0.1))
                     .cornerRadius(12)
             }
             Spacer()
@@ -462,7 +462,7 @@ struct MacTabPill: View {
             .padding(.vertical, 4)
             .background(
                 RoundedRectangle(cornerRadius: 7)
-                    .fill(isSelected ? Color.accentEon.opacity(0.25) : Color.clear)
+                    .fill(isSelected ? Color.white.opacity(0.08) : Color.clear)
             )
             .foregroundColor(isSelected ? .white : .secondary)
         }

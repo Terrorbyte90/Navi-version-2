@@ -106,14 +106,18 @@ extension View {
     }
 }
 
-// MARK: - Color
+// MARK: - Color (ChatGPT-inspired dark theme)
 extension Color {
-    static var codeBackground: Color { Color(red: 0.12, green: 0.12, blue: 0.15) }
-    static var chatBackground: Color { Color(red: 0.08, green: 0.08, blue: 0.12) }
-    static var sidebarBackground: Color { Color(red: 0.10, green: 0.10, blue: 0.13) }
-    static var accentEon: Color { Color(red: 0.3, green: 0.6, blue: 1.0) }
-    static var assistantBubble: Color { Color(red: 0.15, green: 0.15, blue: 0.20) }
-    static var userBubble: Color { Color(red: 0.2, green: 0.4, blue: 0.8) }
+    static var codeBackground: Color { Color(red: 0.10, green: 0.10, blue: 0.10) }       // #1a1a1a
+    static var chatBackground: Color { Color(red: 0.13, green: 0.13, blue: 0.13) }       // #212121
+    static var sidebarBackground: Color { Color(red: 0.09, green: 0.09, blue: 0.09) }    // #171717
+    static var accentEon: Color { Color(red: 0.3, green: 0.6, blue: 1.0) }               // Keep brand blue
+    static var assistantBubble: Color { Color.clear }                                      // No bubble bg
+    static var userBubble: Color { Color(red: 0.185, green: 0.185, blue: 0.185) }        // #2f2f2f subtle pill
+    static var inputBackground: Color { Color(red: 0.185, green: 0.185, blue: 0.185) }   // #2f2f2f
+    static var inputBorder: Color { Color(red: 0.25, green: 0.25, blue: 0.25) }          // #404040
+    static var surfaceHover: Color { Color(red: 0.16, green: 0.16, blue: 0.16) }         // #292929
+    static var dividerColor: Color { Color.white.opacity(0.08) }
 }
 
 // MARK: - Int64

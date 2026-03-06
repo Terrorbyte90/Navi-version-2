@@ -22,7 +22,7 @@ struct ChatView: View {
         ZStack(alignment: .topTrailing) {
             ScrollViewReader { proxy in
                 ScrollView {
-                    LazyVStack(spacing: 12) {
+                    LazyVStack(spacing: 0) {
                         ForEach(agent.conversation.messages) { message in
                             MessageBubble(message: message)
                                 .id(message.id)
@@ -36,12 +36,10 @@ struct ChatView: View {
                                 .id("typing")
                         }
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
+                    .padding(.vertical, 16)
                 }
                 .safeAreaInset(edge: .bottom, spacing: 0) {
                     VStack(spacing: 0) {
-                        // Queue status bar (shown when queue has items)
                         if queue.hasActive {
                             QueueStatusBar(queue: queue)
                         }
@@ -59,7 +57,6 @@ struct ChatView: View {
                         ) {
                             sendMessage()
                         }
-                        .background(Color.chatBackground)
                     }
                 }
                 .onChange(of: agent.conversation.messages.count) { _ in
@@ -75,7 +72,6 @@ struct ChatView: View {
             }
             .background(Color.chatBackground)
 
-            // Queue panel overlay
             if showQueuePanel {
                 QueuePanel(queue: queue, onClose: { showQueuePanel = false })
                     .transition(.move(edge: .trailing).combined(with: .opacity))
@@ -94,7 +90,6 @@ struct ChatView: View {
         selectedImages = []
 
         if iterationCount > 1 || agent.isRunning {
-            // Queue it (with iterations)
             queue.enqueue(text: text, isAgentMode: isAgentMode, iterations: iterationCount)
             iterationCount = 1
         } else {
@@ -124,15 +119,15 @@ struct QueueStatusBar: View {
                 ProgressView()
                     .scaleEffect(0.6)
                     .frame(width: 14, height: 14)
-                Text("Kör prompt…")
-                    .font(.system(size: 11))
-                    .foregroundColor(.accentEon)
+                Text("Kör prompt...")
+                    .font(.system(size: 12))
+                    .foregroundColor(.primary.opacity(0.7))
             } else {
                 Image(systemName: "clock.fill")
                     .font(.system(size: 10))
                     .foregroundColor(.secondary)
-                Text("Väntar…")
-                    .font(.system(size: 11))
+                Text("Väntar...")
+                    .font(.system(size: 12))
                     .foregroundColor(.secondary)
             }
 
@@ -141,27 +136,26 @@ struct QueueStatusBar: View {
             let waiting = queue.waitingCount
             if waiting > 0 {
                 Text("\(waiting) i kö")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.system(size: 12, weight: .medium))
                     .foregroundColor(.secondary)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(Capsule().fill(Color.white.opacity(0.08)))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(Capsule().fill(Color.white.opacity(0.06)))
             }
 
             Button {
                 queue.clearWaiting()
             } label: {
                 Image(systemName: "xmark.circle")
-                    .font(.system(size: 12))
-                    .foregroundColor(.secondary.opacity(0.6))
+                    .font(.system(size: 13))
+                    .foregroundColor(.secondary.opacity(0.5))
             }
             .buttonStyle(.plain)
             .help("Rensa kö")
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 6)
-        .background(Color.white.opacity(0.04))
-        .overlay(Divider().opacity(0.15), alignment: .top)
+        .padding(.vertical, 8)
+        .background(Color.surfaceHover)
     }
 }
 
@@ -173,37 +167,36 @@ struct QueuePanel: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Header
             HStack {
                 Text("Prompt-kö")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(size: 15, weight: .semibold))
                 Spacer()
                 Button {
                     queue.clearFinished()
                 } label: {
                     Text("Rensa klara")
-                        .font(.system(size: 11))
+                        .font(.system(size: 12))
                         .foregroundColor(.secondary)
                 }
                 .buttonStyle(.plain)
                 Button(action: onClose) {
                     Image(systemName: "xmark")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.system(size: 13, weight: .medium))
                         .foregroundColor(.secondary)
                 }
                 .buttonStyle(.plain)
             }
             .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+            .padding(.vertical, 14)
 
-            Divider().opacity(0.2)
+            Divider().opacity(0.12)
 
             if queue.items.isEmpty {
                 Text("Kön är tom")
-                    .font(.system(size: 13))
+                    .font(.system(size: 14))
                     .foregroundColor(.secondary)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 24)
+                    .padding(.vertical, 28)
             } else {
                 ScrollView {
                     LazyVStack(spacing: 4) {
@@ -218,15 +211,15 @@ struct QueuePanel: View {
                 }
             }
         }
-        .frame(width: 280)
+        .frame(width: 300)
         .background(
-            RoundedRectangle(cornerRadius: 14)
-                .fill(Color.chatBackground)
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color.sidebarBackground)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 14)
-                        .strokeBorder(Color.white.opacity(0.1), lineWidth: 0.5)
+                    RoundedRectangle(cornerRadius: 16)
+                        .strokeBorder(Color.dividerColor, lineWidth: 1)
                 )
-                .shadow(color: .black.opacity(0.3), radius: 16, x: -4, y: 4)
+                .shadow(color: .black.opacity(0.4), radius: 20, x: -4, y: 4)
         )
         .padding(.top, 8)
         .padding(.trailing, 8)
@@ -241,42 +234,39 @@ struct QueueItemRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
-            // Status icon
             statusIcon
                 .frame(width: 16)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.text.prefix(80))
-                    .font(.system(size: 12))
+                    .font(.system(size: 13))
                     .foregroundColor(.primary)
                     .lineLimit(2)
 
                 HStack(spacing: 6) {
                     if item.iterationsTotal > 1 {
-                        Text("\(item.iterationsDone)/\(item.iterationsTotal) iter.")
-                            .font(.system(size: 10, design: .monospaced))
+                        Text("\(item.iterationsDone)/\(item.iterationsTotal)")
+                            .font(.system(size: 11, design: .monospaced))
                             .foregroundColor(.accentEon.opacity(0.8))
                     }
                     Text(item.isAgentMode ? "Agent" : "Chat")
-                        .font(.system(size: 10))
+                        .font(.system(size: 11))
                         .foregroundColor(.secondary)
                 }
             }
 
             Spacer()
 
-            // Progress for multi-iteration
             if item.iterationsTotal > 1 && item.status == .running {
                 CircularProgress(value: item.progress)
                     .frame(width: 18, height: 18)
             }
 
-            // Cancel button for waiting items
             if item.status == .waiting {
                 Button(action: onCancel) {
                     Image(systemName: "xmark")
                         .font(.system(size: 10))
-                        .foregroundColor(.secondary.opacity(0.6))
+                        .foregroundColor(.secondary.opacity(0.5))
                 }
                 .buttonStyle(.plain)
             }
@@ -332,7 +322,7 @@ struct CircularProgress: View {
     var body: some View {
         ZStack {
             Circle()
-                .stroke(Color.white.opacity(0.1), lineWidth: 2)
+                .stroke(Color.white.opacity(0.08), lineWidth: 2)
             Circle()
                 .trim(from: 0, to: value)
                 .stroke(Color.accentEon, style: StrokeStyle(lineWidth: 2, lineCap: .round))
@@ -341,51 +331,63 @@ struct CircularProgress: View {
     }
 }
 
-// MARK: - Message Bubble
+// MARK: - Message Bubble (ChatGPT style)
 
 struct MessageBubble: View {
     let message: ChatMessage
 
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            if message.role == .user { Spacer(minLength: 40) }
-
-            VStack(alignment: message.role == .user ? .trailing : .leading, spacing: 4) {
-                // Role label
-                if message.role == .assistant {
-                    HStack(spacing: 4) {
+        VStack(alignment: .leading, spacing: 0) {
+            if message.role == .user {
+                // User message: right-aligned subtle pill
+                HStack {
+                    Spacer(minLength: 60)
+                    contentView
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                        .background(
+                            RoundedRectangle(cornerRadius: 20)
+                                .fill(Color.userBubble)
+                        )
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 8)
+            } else {
+                // Assistant message: full-width, no bubble, with icon
+                HStack(alignment: .top, spacing: 12) {
+                    // Assistant avatar
+                    ZStack {
+                        Circle()
+                            .fill(Color.accentEon.opacity(0.15))
+                            .frame(width: 28, height: 28)
                         Image(systemName: "sparkle")
-                            .font(.system(size: 10))
+                            .font(.system(size: 13))
                             .foregroundColor(.accentEon)
-                        Text(message.model?.displayName ?? "EonCode")
-                            .font(.system(size: 11))
-                            .foregroundColor(.secondary)
                     }
-                }
+                    .padding(.top, 2)
 
-                // Content
-                contentView
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .background(
-                        RoundedRectangle(cornerRadius: 16)
-                            .fill(message.role == .user ? Color.userBubble : Color.assistantBubble)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 16)
-                                    .strokeBorder(Color.white.opacity(0.08), lineWidth: 0.5)
-                            )
-                    )
+                    VStack(alignment: .leading, spacing: 6) {
+                        // Model label
+                        Text(message.model?.displayName ?? "EonCode")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(.primary)
 
-                // Cost badge with token detail
-                if message.costSEK > 0 && message.role == .assistant {
-                    let usage = message.inputTokens > 0
-                        ? TokenUsage(inputTokens: message.inputTokens, outputTokens: message.outputTokens, cacheCreationInputTokens: nil, cacheReadInputTokens: nil)
-                        : nil
-                    CostBadge(costSEK: message.costSEK, usage: usage, model: message.model)
+                        contentView
+
+                        // Cost badge
+                        if message.costSEK > 0 {
+                            let usage = message.inputTokens > 0
+                                ? TokenUsage(inputTokens: message.inputTokens, outputTokens: message.outputTokens, cacheCreationInputTokens: nil, cacheReadInputTokens: nil)
+                                : nil
+                            CostBadge(costSEK: message.costSEK, usage: usage, model: message.model)
+                        }
+                    }
+
+                    Spacer(minLength: 20)
                 }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 12)
             }
-
-            if message.role == .assistant { Spacer(minLength: 40) }
         }
     }
 
@@ -399,8 +401,9 @@ struct MessageBubble: View {
                         renderTextWithCodeBlocks(t)
                     } else {
                         Text(t)
-                            .font(.system(size: 14))
+                            .font(.system(size: 15))
                             .foregroundColor(.primary)
+                            .lineSpacing(4)
                             .textSelection(.enabled)
                     }
                 case .image(let data, _):
@@ -408,16 +411,25 @@ struct MessageBubble: View {
                         Image(platformImage: uiImage)
                             .resizable()
                             .scaledToFit()
-                            .frame(maxWidth: 250)
-                            .cornerRadius(8)
+                            .frame(maxWidth: 280)
+                            .cornerRadius(12)
                     }
                 case .toolUse(_, let name, _):
-                    Label("Verktyg: \(name)", systemImage: "wrench.fill")
-                        .font(.system(size: 12))
-                        .foregroundColor(.secondary)
+                    HStack(spacing: 6) {
+                        Image(systemName: "wrench.fill")
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary)
+                        Text(name)
+                            .font(.system(size: 13))
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Color.white.opacity(0.04))
+                    .cornerRadius(8)
                 case .toolResult(_, let result, let isError):
                     Text(result.prefix(300))
-                        .font(.system(size: 12, design: .monospaced))
+                        .font(.system(size: 13, design: .monospaced))
                         .foregroundColor(isError ? .red : .secondary)
                         .lineLimit(8)
                 }
@@ -437,8 +449,9 @@ struct MessageBubble: View {
                 CodeBlockView(code: part.content, language: part.language)
             } else if !part.content.trimmed.isEmpty {
                 Text(part.content)
-                    .font(.system(size: 14))
+                    .font(.system(size: 15))
                     .foregroundColor(.primary)
+                    .lineSpacing(4)
                     .textSelection(.enabled)
             }
         }
@@ -485,7 +498,7 @@ struct MessageBubble: View {
     }
 }
 
-// MARK: - Code Block View
+// MARK: - Code Block View (ChatGPT style)
 
 struct CodeBlockView: View {
     let code: String
@@ -497,37 +510,39 @@ struct CodeBlockView: View {
             // Header
             HStack {
                 Text(language ?? "code")
-                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .font(.system(size: 12, weight: .medium))
                     .foregroundColor(.secondary)
                 Spacer()
                 Button {
                     copyCode()
                 } label: {
-                    Label(copied ? "Kopierad!" : "Kopiera", systemImage: copied ? "checkmark" : "doc.on.doc")
-                        .font(.system(size: 11))
-                        .foregroundColor(copied ? .green : .secondary)
+                    HStack(spacing: 4) {
+                        Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                            .font(.system(size: 11))
+                        Text(copied ? "Kopierad" : "Kopiera")
+                            .font(.system(size: 12))
+                    }
+                    .foregroundColor(copied ? .green : .secondary)
                 }
                 .buttonStyle(.plain)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .background(Color.white.opacity(0.05))
-
-            Divider().opacity(0.3)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .background(Color(red: 0.08, green: 0.08, blue: 0.08))
 
             // Code
             ScrollView(.horizontal, showsIndicators: false) {
-                LargeTextView(text: code.trimmed, fontSize: 12, fontDesign: .monospaced)
-                    .padding(12)
+                LargeTextView(text: code.trimmed, fontSize: 13, fontDesign: .monospaced)
+                    .padding(14)
             }
         }
         .background(
-            RoundedRectangle(cornerRadius: 10)
+            RoundedRectangle(cornerRadius: 12)
                 .fill(Color.codeBackground)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .strokeBorder(Color.white.opacity(0.1), lineWidth: 0.5)
-                )
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .strokeBorder(Color.dividerColor, lineWidth: 1)
         )
     }
 
@@ -543,63 +558,89 @@ struct CodeBlockView: View {
     }
 }
 
-// MARK: - Streaming bubble
+// MARK: - Streaming bubble (ChatGPT style)
 
 struct StreamingBubble: View {
     let text: String
 
     var body: some View {
-        HStack(alignment: .top) {
-            if text.isEmpty {
-                // Three dots while waiting for first token
-                TypingIndicator()
-            } else {
-                // Stream text directly — no "Genererar" label
-                Text(text.suffix(3000))
-                    .font(.system(size: 14))
-                    .foregroundColor(.primary)
-                    .textSelection(.enabled)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .background(
-                        RoundedRectangle(cornerRadius: 16)
-                            .fill(Color.assistantBubble)
-                    )
+        if text.isEmpty {
+            TypingIndicator()
+        } else {
+            HStack(alignment: .top, spacing: 12) {
+                ZStack {
+                    Circle()
+                        .fill(Color.accentEon.opacity(0.15))
+                        .frame(width: 28, height: 28)
+                    Image(systemName: "sparkle")
+                        .font(.system(size: 13))
+                        .foregroundColor(.accentEon)
+                }
+                .padding(.top, 2)
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("EonCode")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.primary)
+
+                    Text(text.suffix(3000))
+                        .font(.system(size: 15))
+                        .foregroundColor(.primary)
+                        .lineSpacing(4)
+                        .textSelection(.enabled)
+                }
+
+                Spacer(minLength: 20)
             }
-            Spacer(minLength: 40)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
         }
     }
 }
 
-// MARK: - Typing indicator (iMessage-style three dots)
+// MARK: - Typing indicator
 
 struct TypingIndicator: View {
     @State private var animating = false
 
     var body: some View {
-        HStack(spacing: 5) {
-            ForEach(0..<3, id: \.self) { i in
+        HStack(alignment: .top, spacing: 12) {
+            ZStack {
                 Circle()
-                    .fill(Color.secondary.opacity(0.5))
-                    .frame(width: 7, height: 7)
-                    .scaleEffect(animating ? 1.0 : 0.5)
-                    .opacity(animating ? 1.0 : 0.3)
-                    .animation(
-                        .easeInOut(duration: 0.5)
-                            .repeatForever(autoreverses: true)
-                            .delay(Double(i) * 0.18),
-                        value: animating
-                    )
+                    .fill(Color.accentEon.opacity(0.15))
+                    .frame(width: 28, height: 28)
+                Image(systemName: "sparkle")
+                    .font(.system(size: 13))
+                    .foregroundColor(.accentEon)
             }
+            .padding(.top, 2)
+
+            HStack(spacing: 5) {
+                ForEach(0..<3, id: \.self) { i in
+                    Circle()
+                        .fill(Color.secondary.opacity(0.6))
+                        .frame(width: 6, height: 6)
+                        .scaleEffect(animating ? 1.0 : 0.5)
+                        .opacity(animating ? 1.0 : 0.3)
+                        .animation(
+                            .easeInOut(duration: 0.5)
+                                .repeatForever(autoreverses: true)
+                                .delay(Double(i) * 0.18),
+                            value: animating
+                        )
+                }
+            }
+            .padding(.top, 8)
+
+            Spacer()
         }
-        .padding(.horizontal, 14)
+        .padding(.horizontal, 20)
         .padding(.vertical, 12)
-        .background(RoundedRectangle(cornerRadius: 16).fill(Color.assistantBubble))
         .onAppear { animating = true }
     }
 }
 
-// MARK: - Input bar
+// MARK: - Input bar (ChatGPT style)
 
 struct InputBar: View {
     @Binding var text: String
@@ -618,168 +659,158 @@ struct InputBar: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Divider().opacity(0.2)
-
             // Images preview
             if !selectedImages.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack {
+                    HStack(spacing: 8) {
                         ForEach(Array(selectedImages.enumerated()), id: \.offset) { i, data in
                             ZStack(alignment: .topTrailing) {
                                 if let img = PlatformImage(data: data) {
                                     Image(platformImage: img)
                                         .resizable()
                                         .scaledToFill()
-                                        .frame(width: 60, height: 60)
+                                        .frame(width: 56, height: 56)
                                         .clipShape(RoundedRectangle(cornerRadius: 8))
                                 }
                                 Button {
                                     selectedImages.remove(at: i)
                                 } label: {
                                     Image(systemName: "xmark.circle.fill")
+                                        .font(.system(size: 16))
                                         .foregroundColor(.white)
-                                        .background(Circle().fill(Color.black.opacity(0.5)))
+                                        .background(Circle().fill(Color.black.opacity(0.6)))
                                 }
                                 .buttonStyle(.plain)
                                 .offset(x: 4, y: -4)
                             }
                         }
                     }
-                    .padding(.horizontal, 16)
+                    .padding(.horizontal, 20)
                     .padding(.top, 8)
                 }
             }
 
-            HStack(alignment: .bottom, spacing: 8) {
-                // Agent mode toggle
-                Button {
-                    isAgentMode.toggle()
-                } label: {
-                    Image(systemName: isAgentMode ? "cpu.fill" : "cpu")
-                        .font(.system(size: 17))
-                        .foregroundColor(isAgentMode ? .accentEon : .secondary)
-                }
-                .buttonStyle(.plain)
-                .help("Agent-läge: " + (isAgentMode ? "PÅ" : "AV"))
-
-                // Image attach
-                Button {
-                    showImagePicker = true
-                } label: {
-                    Image(systemName: "paperclip")
-                        .font(.system(size: 17))
-                        .foregroundColor(.secondary)
-                }
-                .buttonStyle(.plain)
-
-                // Text input
-                TextField(isAgentMode ? "Ge agenten en uppgift…" : "Skriv ett meddelande…", text: $text, axis: .vertical)
-                    .font(.system(size: 14))
-                    .lineLimit(1...5)
-                    .textFieldStyle(.plain)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(
-                        RoundedRectangle(cornerRadius: 16)
-                            .fill(Color.white.opacity(0.07))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 16)
-                                    .strokeBorder(Color.white.opacity(0.12), lineWidth: 0.5)
-                            )
-                    )
-
-                // Iteration picker (agent mode only)
-                if isAgentMode {
-                    Menu {
-                        ForEach([1, 2, 3, 5, 10, 20, 50, 100], id: \.self) { n in
-                            Button("\(n)×") { iterationCount = n }
-                        }
+            // Main input pill
+            HStack(alignment: .bottom, spacing: 0) {
+                HStack(spacing: 4) {
+                    Button {
+                        showImagePicker = true
                     } label: {
-                        HStack(spacing: 2) {
-                            Text("\(iterationCount)×")
-                                .font(.system(size: 12, weight: .medium, design: .monospaced))
-                                .foregroundColor(iterationCount > 1 ? .accentEon : .secondary.opacity(0.6))
-                        }
-                        .frame(minWidth: 28)
+                        Image(systemName: "paperclip")
+                            .font(.system(size: 16))
+                            .foregroundColor(.secondary)
+                            .frame(width: 32, height: 32)
+                            .contentShape(Circle())
                     }
-                    .help("Antal iterationer")
+                    .buttonStyle(.plain)
+
+                    Button {
+                        isAgentMode.toggle()
+                    } label: {
+                        Image(systemName: isAgentMode ? "cpu.fill" : "cpu")
+                            .font(.system(size: 15))
+                            .foregroundColor(isAgentMode ? .accentEon : .secondary)
+                            .frame(width: 32, height: 32)
+                            .contentShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .help("Agent-läge: " + (isAgentMode ? "PÅ" : "AV"))
                 }
 
-                // Send button
-                Button(action: onSend) {
-                    if isLoading {
-                        ProgressView()
-                            .scaleEffect(0.7)
-                            .frame(width: 32, height: 32)
-                    } else {
-                        Image(systemName: "arrow.up.circle.fill")
-                            .font(.system(size: 28))
-                            .foregroundColor(text.isBlank && selectedImages.isEmpty ? .secondary.opacity(0.3) : .accentEon)
+                TextField(isAgentMode ? "Ge agenten en uppgift..." : "Skriv ett meddelande...", text: $text, axis: .vertical)
+                    .font(.system(size: 15))
+                    .lineLimit(1...8)
+                    .textFieldStyle(.plain)
+                    .padding(.vertical, 8)
+
+                HStack(spacing: 4) {
+                    if isAgentMode {
+                        Menu {
+                            ForEach([1, 2, 3, 5, 10, 20, 50, 100], id: \.self) { n in
+                                Button("\(n)x") { iterationCount = n }
+                            }
+                        } label: {
+                            Text("\(iterationCount)x")
+                                .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                                .foregroundColor(iterationCount > 1 ? .accentEon : .secondary.opacity(0.5))
+                                .frame(width: 28, height: 32)
+                        }
                     }
+
+                    Button(action: onSend) {
+                        if isLoading {
+                            ProgressView()
+                                .scaleEffect(0.65)
+                                .frame(width: 30, height: 30)
+                        } else {
+                            Image(systemName: "arrow.up")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(text.isBlank && selectedImages.isEmpty ? .secondary.opacity(0.3) : .black)
+                                .frame(width: 30, height: 30)
+                                .background(
+                                    Circle()
+                                        .fill(text.isBlank && selectedImages.isEmpty ? Color.clear : Color.white)
+                                )
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(isLoading || (text.isBlank && selectedImages.isEmpty))
                 }
-                .buttonStyle(.plain)
-                .disabled(isLoading || (text.isBlank && selectedImages.isEmpty))
             }
-            .padding(.horizontal, 12)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(
+                RoundedRectangle(cornerRadius: 24)
+                    .fill(Color.inputBackground)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 24)
+                            .strokeBorder(Color.inputBorder, lineWidth: 1)
+                    )
+            )
+            .padding(.horizontal, 16)
             .padding(.vertical, 10)
 
             // Status bar
-            HStack {
+            HStack(spacing: 8) {
                 Text(model.displayName)
-                    .font(.system(size: 11))
-                    .foregroundColor(.secondary.opacity(0.6))
+                    .font(.system(size: 12))
+                    .foregroundColor(.secondary.opacity(0.5))
 
                 if isAgentMode {
-                    Text("· Agent")
-                        .font(.system(size: 11))
-                        .foregroundColor(.accentEon.opacity(0.7))
+                    Text("Agent")
+                        .font(.system(size: 12))
+                        .foregroundColor(.accentEon.opacity(0.6))
                 }
 
                 Spacer()
 
-                // Queue button
                 Button(action: onShowQueue) {
-                    HStack(spacing: 3) {
+                    HStack(spacing: 4) {
                         Image(systemName: "list.bullet")
-                            .font(.system(size: 9))
+                            .font(.system(size: 10))
                         if queueCount > 0 {
                             Text("\(queueCount)")
-                                .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                                .font(.system(size: 12, weight: .semibold, design: .monospaced))
                                 .foregroundColor(.accentEon)
-                        } else {
-                            Text("Kö")
-                                .font(.system(size: 11))
-                                .foregroundColor(.secondary.opacity(0.5))
                         }
                     }
+                    .foregroundColor(.secondary.opacity(0.4))
                 }
                 .buttonStyle(.plain)
-                .padding(.trailing, 8)
 
-                // Last request cost + session total
-                HStack(spacing: 6) {
-                    if let cost = costText {
-                        HStack(spacing: 3) {
-                            Image(systemName: "arrow.up.circle")
-                                .font(.system(size: 9))
-                            Text(cost)
-                                .font(.system(size: 11, design: .monospaced))
-                        }
-                        .foregroundColor(.secondary.opacity(0.55))
-                    }
-                    let sessionCost = CostTracker.shared.sessionSEK
-                    if sessionCost > 0.001 {
-                        HStack(spacing: 3) {
-                            Image(systemName: "clock")
-                                .font(.system(size: 9))
-                            Text(String(format: "%.2f kr", sessionCost))
-                                .font(.system(size: 11, design: .monospaced))
-                        }
-                        .foregroundColor(.secondary.opacity(0.38))
-                    }
+                if let cost = costText {
+                    Text(cost)
+                        .font(.system(size: 12, design: .monospaced))
+                        .foregroundColor(.secondary.opacity(0.4))
+                }
+                let sessionCost = CostTracker.shared.sessionSEK
+                if sessionCost > 0.001 {
+                    Text(String(format: "%.2f kr", sessionCost))
+                        .font(.system(size: 12, design: .monospaced))
+                        .foregroundColor(.secondary.opacity(0.3))
                 }
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, 20)
             .padding(.bottom, 8)
         }
         .background(Color.chatBackground)
@@ -792,7 +823,7 @@ struct InputBar: View {
     let project = EonProject(name: "EonCode Preview", rootPath: "/tmp/preview")
     let agent = ProjectAgent(project: project)
     return ChatView(agent: agent)
-        .frame(width: 400, height: 600)
+        .frame(width: 500, height: 600)
         .preferredColorScheme(.dark)
 }
 
@@ -800,7 +831,7 @@ struct InputBar: View {
     let msg = ChatMessage(role: .user, content: [.text("Hej! Kan du hjälpa mig med en Swift-funktion?")])
     return MessageBubble(message: msg)
         .padding()
-        .background(Color.black)
+        .background(Color.chatBackground)
         .preferredColorScheme(.dark)
 }
 
@@ -809,31 +840,7 @@ struct InputBar: View {
     let msg = ChatMessage(role: .assistant, content: [.text("Självklart! Här är ett exempel:\n\(code)")], model: .haiku)
     return MessageBubble(message: msg)
         .padding()
-        .background(Color.black)
-        .preferredColorScheme(.dark)
-}
-
-#Preview("CodeBlockView") {
-    CodeBlockView(
-        code: "func greet(_ name: String) -> String {\n    return \"Hej, \\(name)!\"\n}",
-        language: "swift"
-    )
-    .padding()
-    .background(Color.black)
-    .preferredColorScheme(.dark)
-}
-
-#Preview("StreamingBubble") {
-    StreamingBubble(text: "Jag analyserar din kod och identifierar eventuella problem…")
-        .padding()
-        .background(Color.black)
-        .preferredColorScheme(.dark)
-}
-
-#Preview("TypingIndicator") {
-    TypingIndicator()
-        .padding()
-        .background(Color.black)
+        .background(Color.chatBackground)
         .preferredColorScheme(.dark)
 }
 
@@ -849,7 +856,7 @@ struct InputBar: View {
         model: .haiku,
         onShowQueue: {}
     ) {}
-    .background(Color.black)
+    .background(Color.chatBackground)
     .preferredColorScheme(.dark)
 }
 

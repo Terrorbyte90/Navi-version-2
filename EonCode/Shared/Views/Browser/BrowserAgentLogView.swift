@@ -45,7 +45,7 @@ struct BrowserAgentLogView: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background(Color.white.opacity(0.03))
+            .background(Color.surfaceHover)
 
             Divider().opacity(0.1)
 

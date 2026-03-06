@@ -107,10 +107,10 @@ struct GlassTextField: View {
         .padding(.vertical, 9)
         .background(
             RoundedRectangle(cornerRadius: 10)
-                .fill(Color.white.opacity(0.07))
+                .fill(Color.inputBackground)
                 .overlay(
                     RoundedRectangle(cornerRadius: 10)
-                        .strokeBorder(Color.white.opacity(0.15), lineWidth: 0.5)
+                        .strokeBorder(Color.inputBorder, lineWidth: 0.5)
                 )
         )
     }

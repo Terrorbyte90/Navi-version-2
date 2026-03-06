@@ -124,7 +124,7 @@ struct SidebarView: View {
         }
         .padding(.horizontal, 9)
         .padding(.vertical, 6)
-        .background(Color.white.opacity(0.07))
+        .background(Color.white.opacity(0.05))
         .cornerRadius(7)
     }
 
@@ -188,7 +188,7 @@ struct SidebarView: View {
             .padding(.vertical, 7)
             .background(
                 RoundedRectangle(cornerRadius: 7)
-                    .fill(section == target ? Color.accentEon.opacity(0.3) : Color.clear)
+                    .fill(section == target ? Color.white.opacity(0.08) : Color.clear)
             )
         }
         .buttonStyle(.plain)
@@ -321,7 +321,7 @@ struct SidebarView: View {
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
             .background(RoundedRectangle(cornerRadius: 7)
-                .fill(isActive ? Color.accentEon.opacity(0.25) : Color.clear))
+                .fill(isActive ? Color.white.opacity(0.08) : Color.clear))
         }
         .buttonStyle(.plain)
         .padding(.horizontal, 6)
@@ -554,7 +554,7 @@ struct ChatConversationRow: View {
             .padding(.horizontal, 10)
             .padding(.vertical, 7)
             .background(RoundedRectangle(cornerRadius: 7)
-                .fill(isSelected ? Color.accentEon.opacity(0.25) : Color.clear))
+                .fill(isSelected ? Color.white.opacity(0.08) : Color.clear))
         }
         .buttonStyle(.plain)
         .padding(.horizontal, 6)
@@ -628,7 +628,7 @@ struct ProjectRow: View {
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
             .background(RoundedRectangle(cornerRadius: 7)
-                .fill(isSelected ? Color.accentEon.opacity(0.25) : Color.clear))
+                .fill(isSelected ? Color.white.opacity(0.08) : Color.clear))
         }
         .buttonStyle(.plain)
         .padding(.horizontal, 6)

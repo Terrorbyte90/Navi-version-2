@@ -22,15 +22,17 @@ struct BrowserView: View {
         HSplitView {
             VStack(spacing: 0) {
                 BrowserAddressBar(agent: agent)
+                Divider().opacity(0.08)
                 WebViewContainer(agent: agent)
             }
             .frame(minWidth: 520)
 
             VStack(spacing: 0) {
                 BrowserAgentLogView(agent: agent)
+                Divider().opacity(0.08)
                 BrowserInputView(agent: agent)
             }
-            .frame(width: 300)
+            .frame(width: 320)
             .background(Color.chatBackground)
         }
     }
@@ -42,11 +44,11 @@ struct BrowserView: View {
         ZStack(alignment: .bottom) {
             VStack(spacing: 0) {
                 BrowserAddressBar(agent: agent)
+                Divider().opacity(0.08)
                 WebViewContainer(agent: agent)
                     .ignoresSafeArea(edges: .bottom)
             }
 
-            // Floating bottom panel
             BrowserBottomPanel(agent: agent, showLog: $showLog)
         }
         .background(Color.chatBackground)
@@ -57,7 +59,6 @@ struct BrowserView: View {
 
 struct BrowserAddressBar: View {
     @ObservedObject var agent: BrowserAgent
-    @State private var progressWidth: CGFloat = 0
     @State private var editingURL = false
     @State private var urlText = ""
     @FocusState private var urlFocused: Bool
@@ -70,27 +71,30 @@ struct BrowserAddressBar: View {
     }
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 10) {
             // Back / Forward
-            Button { agent.webView.goBack() } label: {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(agent.webView.canGoBack ? .primary : .secondary.opacity(0.4))
-            }
-            .buttonStyle(.plain)
-            .disabled(!agent.webView.canGoBack)
+            HStack(spacing: 4) {
+                Button { agent.webView.goBack() } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(agent.webView.canGoBack ? .primary : .secondary.opacity(0.3))
+                        .frame(width: 28, height: 28)
+                }
+                .buttonStyle(.plain)
+                .disabled(!agent.webView.canGoBack)
 
-            Button { agent.webView.goForward() } label: {
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(agent.webView.canGoForward ? .primary : .secondary.opacity(0.4))
+                Button { agent.webView.goForward() } label: {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(agent.webView.canGoForward ? .primary : .secondary.opacity(0.3))
+                        .frame(width: 28, height: 28)
+                }
+                .buttonStyle(.plain)
+                .disabled(!agent.webView.canGoForward)
             }
-            .buttonStyle(.plain)
-            .disabled(!agent.webView.canGoForward)
 
-            // URL pill
+            // URL field
             HStack(spacing: 6) {
-                // Lock / globe icon
                 Image(systemName: agent.currentURL?.scheme == "https" ? "lock.fill" : "globe")
                     .font(.system(size: 11))
                     .foregroundColor(agent.currentURL?.scheme == "https" ? .green : .secondary)
@@ -98,19 +102,17 @@ struct BrowserAddressBar: View {
                 if editingURL {
                     TextField("URL eller sökterm", text: $urlText)
                         .textFieldStyle(.plain)
-                        .font(.system(size: 13))
+                        .font(.system(size: 14))
                         .focused($urlFocused)
-                        .onSubmit {
-                            navigateToInput()
-                        }
+                        .onSubmit { navigateToInput() }
                         .onAppear {
                             urlText = agent.currentURL?.absoluteString ?? ""
                             urlFocused = true
                         }
                 } else {
-                    Text(displayURL.isEmpty ? "Ange URL eller ge agenten ett mål nedan" : displayURL)
-                        .font(.system(size: 13))
-                        .foregroundColor(displayURL.isEmpty ? .secondary : .primary)
+                    Text(displayURL.isEmpty ? "Ange URL..." : displayURL)
+                        .font(.system(size: 14))
+                        .foregroundColor(displayURL.isEmpty ? .secondary.opacity(0.4) : .primary)
                         .lineLimit(1)
                         .truncationMode(.middle)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -119,7 +121,7 @@ struct BrowserAddressBar: View {
 
                 if agent.status == .working {
                     ProgressView()
-                        .scaleEffect(0.65)
+                        .scaleEffect(0.6)
                         .frame(width: 14, height: 14)
                 } else if !displayURL.isEmpty {
                     Button { agent.webView.reload() } label: {
@@ -130,33 +132,31 @@ struct BrowserAddressBar: View {
                     .buttonStyle(.plain)
                 }
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 7)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
             .background(
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(Color.white.opacity(0.07))
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color.inputBackground)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 10)
+                        RoundedRectangle(cornerRadius: 12)
                             .strokeBorder(
-                                editingURL ? Color.accentEon.opacity(0.6) : Color.white.opacity(0.08),
+                                editingURL ? Color.accentEon.opacity(0.5) : Color.inputBorder,
                                 lineWidth: 1
                             )
                     )
             )
             .frame(maxWidth: .infinity)
-            .onTapGesture { if !editingURL { editingURL = true } }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .background(Color.chatBackground)
         .overlay(alignment: .bottom) {
             ZStack(alignment: .leading) {
-                Divider().opacity(0.15)
-                // Loading progress line
+                Divider().opacity(0.08)
                 if agent.status == .working && agent.loadingProgress > 0 && agent.loadingProgress < 1 {
                     GeometryReader { geo in
                         Rectangle()
-                            .fill(Color.accentEon.opacity(0.8))
+                            .fill(Color.accentEon.opacity(0.7))
                             .frame(width: geo.size.width * agent.loadingProgress, height: 2)
                             .animation(.easeInOut(duration: 0.3), value: agent.loadingProgress)
                     }
@@ -164,8 +164,6 @@ struct BrowserAddressBar: View {
                 }
             }
         }
-        .contentShape(Rectangle())
-        .onTapGesture {} // absorb taps on bar background
     }
 
     private func navigateToInput() {
@@ -191,31 +189,28 @@ struct BrowserBottomPanel: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Log toggle handle
             if !agent.log.isEmpty {
                 Button {
                     withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
                         showLog.toggle()
                     }
                 } label: {
-                    HStack(spacing: 6) {
-                        RoundedRectangle(cornerRadius: 2)
-                            .fill(Color.secondary.opacity(0.4))
-                            .frame(width: 36, height: 4)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 6)
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(Color.secondary.opacity(0.3))
+                        .frame(width: 36, height: 4)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
                 }
                 .buttonStyle(.plain)
             }
 
             if showLog {
                 BrowserAgentLogView(agent: agent)
-                    .frame(height: 180)
+                    .frame(height: 200)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
 
-            Divider().opacity(0.12)
+            Divider().opacity(0.08)
             BrowserInputView(agent: agent)
         }
         .background(

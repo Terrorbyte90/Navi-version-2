@@ -1,7 +1,6 @@
 import SwiftUI
 
 // MARK: - BrowserInputView
-// Input for giving the browser agent a goal or responding to its questions.
 
 struct BrowserInputView: View {
     @ObservedObject var agent: BrowserAgent
@@ -12,44 +11,71 @@ struct BrowserInputView: View {
     private var isWorking: Bool { agent.status == .working }
 
     var body: some View {
-        HStack(spacing: 10) {
-            // Status dot
-            statusDot
-
-            // Text field
-            ZStack(alignment: .leading) {
-                if input.isEmpty {
-                    Text(placeholderText)
-                        .font(.system(size: 14))
-                        .foregroundColor(.secondary.opacity(0.5))
-                        .allowsHitTesting(false)
+        VStack(spacing: 8) {
+            if agent.status != .idle {
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(dotColor)
+                        .frame(width: 6, height: 6)
+                    Text(statusLabel)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(dotColor)
+                    Spacer()
+                    if isWorking {
+                        Button {
+                            agent.cancel()
+                        } label: {
+                            Text("Avbryt")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(.red.opacity(0.8))
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
-                TextField("", text: $input)
-                    .textFieldStyle(.plain)
+                .padding(.horizontal, 20)
+            }
+
+            HStack(alignment: .bottom, spacing: 0) {
+                Image(systemName: dotIcon)
                     .font(.system(size: 14))
+                    .foregroundColor(dotColor)
+                    .frame(width: 32, height: 32)
+
+                TextField(placeholderText, text: $input)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 15))
                     .focused($isFocused)
                     .onSubmit { handleSend() }
                     .foregroundColor(isWaiting ? .yellow : .primary)
                     .disabled(isWorking)
+                    .padding(.vertical, 8)
+
+                Button { handleSend() } label: {
+                    Image(systemName: "arrow.up")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(input.isBlank ? .secondary.opacity(0.3) : .black)
+                        .frame(width: 30, height: 30)
+                        .background(
+                            Circle()
+                                .fill(input.isBlank ? Color.clear : isWaiting ? Color.yellow : Color.white)
+                        )
+                }
+                .buttonStyle(.plain)
+                .disabled(input.isBlank || isWorking)
+                .padding(.trailing, 4)
             }
-
-            // Action button
-            actionButton
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-    }
-
-    // MARK: - Status dot
-
-    private var statusDot: some View {
-        ZStack {
-            Circle()
-                .fill(dotColor.opacity(0.15))
-                .frame(width: 28, height: 28)
-            Image(systemName: dotIcon)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundColor(dotColor)
+            .padding(.leading, 8)
+            .padding(.vertical, 4)
+            .background(
+                RoundedRectangle(cornerRadius: 24)
+                    .fill(Color.inputBackground)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 24)
+                            .strokeBorder(isWaiting ? Color.yellow.opacity(0.4) : Color.inputBorder, lineWidth: 1)
+                    )
+            )
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
         }
     }
 
@@ -73,59 +99,25 @@ struct BrowserInputView: View {
         }
     }
 
-    // MARK: - Placeholder
+    private var statusLabel: String {
+        switch agent.status {
+        case .working:        return "Arbetar..."
+        case .waitingForUser: return "Väntar på dig"
+        case .complete:       return "Klar"
+        case .failed:         return "Misslyckades"
+        case .idle:           return ""
+        }
+    }
 
     private var placeholderText: String {
         switch agent.status {
-        case .waitingForUser: return agent.userQuestion.isEmpty ? "Skriv ditt svar…" : agent.userQuestion
-        case .working:        return "Agenten arbetar…"
-        case .complete:       return "Klart! Ge ett nytt mål…"
-        case .failed:         return "Misslyckades. Försök igen…"
-        case .idle:           return "Ge webbläsaren ett mål…"
+        case .waitingForUser: return agent.userQuestion.isEmpty ? "Skriv ditt svar..." : agent.userQuestion
+        case .working:        return "Agenten arbetar..."
+        case .complete:       return "Klart! Ge ett nytt mål..."
+        case .failed:         return "Misslyckades. Försök igen..."
+        case .idle:           return "Ge webbläsaren ett mål..."
         }
     }
-
-    // MARK: - Action button
-
-    @ViewBuilder
-    private var actionButton: some View {
-        if isWorking {
-            Button {
-                agent.cancel()
-            } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: "stop.fill")
-                        .font(.system(size: 11))
-                    Text("Avbryt")
-                        .font(.system(size: 13, weight: .medium))
-                }
-                .foregroundColor(.red)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(Color.red.opacity(0.12))
-                .cornerRadius(8)
-            }
-            .buttonStyle(.plain)
-        } else if isWaiting {
-            Button { handleSend() } label: {
-                Image(systemName: "arrow.up.circle.fill")
-                    .font(.system(size: 26))
-                    .foregroundColor(input.isBlank ? .secondary.opacity(0.4) : .yellow)
-            }
-            .buttonStyle(.plain)
-            .disabled(input.isBlank)
-        } else {
-            Button { handleSend() } label: {
-                Image(systemName: "arrow.up.circle.fill")
-                    .font(.system(size: 26))
-                    .foregroundColor(input.isBlank ? .secondary.opacity(0.3) : .accentEon)
-            }
-            .buttonStyle(.plain)
-            .disabled(input.isBlank)
-        }
-    }
-
-    // MARK: - Send
 
     private func handleSend() {
         let text = input.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -141,12 +133,10 @@ struct BrowserInputView: View {
     }
 }
 
-// MARK: - Preview
-
 #Preview("BrowserInputView") {
     VStack {
         BrowserInputView(agent: BrowserAgent.shared)
     }
-    .background(Color.black)
+    .background(Color.chatBackground)
     .preferredColorScheme(.dark)
 }
