@@ -2,6 +2,7 @@ import Foundation
 
 final class ClaudeStreamParser {
     private var buffer = ""
+    private var inputTokensFromStart: Int = 0
 
     func parse(line: String) -> StreamEvent? {
         let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -34,6 +35,10 @@ final class ClaudeStreamParser {
             let msg = obj["message"] as? [String: Any]
             let id = msg?["id"] as? String ?? ""
             let model = msg?["model"] as? String ?? ""
+            // Capture input tokens from message_start usage
+            if let usage = msg?["usage"] as? [String: Any] {
+                inputTokensFromStart = usage["input_tokens"] as? Int ?? 0
+            }
             return .messageStart(id: id, model: model)
 
         case "content_block_start":
@@ -68,7 +73,12 @@ final class ClaudeStreamParser {
             var usage: TokenUsage? = nil
             if let usageObj = usageObj {
                 let output = usageObj["output_tokens"] as? Int ?? 0
-                usage = TokenUsage(inputTokens: 0, outputTokens: output, cacheCreationInputTokens: nil, cacheReadInputTokens: nil)
+                usage = TokenUsage(
+                    inputTokens: inputTokensFromStart,
+                    outputTokens: output,
+                    cacheCreationInputTokens: nil,
+                    cacheReadInputTokens: nil
+                )
             }
             return .messageDelta(stopReason: stopReason, usage: usage)
 

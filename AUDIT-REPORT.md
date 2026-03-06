@@ -105,18 +105,20 @@
 ### MEDEL fixes
 | # | Fil | Problem | Fix |
 |---|-----|---------|-----|
-| 7 | `PureChatView.swift` | StreamingBubble saknade ResponseCleaner | Applicerat `ResponseCleaner.clean()` |
-| 8 | `PureChatView.swift` | Image picker-sheet saknades | Skapat `ImagePicker.swift` (PHPicker iOS / NSOpenPanel macOS), kopplat `.sheet` |
-| 9 | `FileTreeView.swift` | "Ta bort" utan bekräftelse | Lagt till `.alert`-dialog med bekräftelse |
-| 10 | `ExchangeRate.swift` | Ingen staleness-check på cachad kurs | Lagt till `isStale` (24h) + auto-refresh |
-| 11 | `ContentView.swift` + `PureChatView.swift` | Deprecated `onChange { _ in }` syntax | Uppdaterat till ny `onChange { }` syntax (iOS 17+) |
+| 7 | `ClaudeStreamParser.swift` | `inputTokens` hårdkodad till 0 i streaming → kostnadsberäkning underrapporterade | Fångar input tokens från `message_start` och injicerar i `message_delta` usage |
+| 8 | `ClaudeAPIClient.swift` | Force unwrap `URL(string:)!` kunde krascha vid ogiltig URL | Ersatt med `guard let` + throw |
+| 9 | `PureChatView.swift` | StreamingBubble saknade ResponseCleaner | Applicerat `ResponseCleaner.clean()` |
+| 10 | `PureChatView.swift` | Image picker-sheet saknades | Skapat `ImagePicker.swift` (PHPicker iOS / NSOpenPanel macOS), kopplat `.sheet` |
+| 11 | `FileTreeView.swift` | "Ta bort" utan bekräftelse | Lagt till `.alert`-dialog med bekräftelse |
+| 12 | `ExchangeRate.swift` | Ingen staleness-check på cachad kurs | Lagt till `isStale` (24h) + auto-refresh |
+| 13 | `ContentView.swift` + `PureChatView.swift` | Deprecated `onChange { _ in }` syntax | Uppdaterat till ny `onChange { }` syntax (iOS 17+) |
 
 ### Tidigare fixade (i denna session)
 | # | Fil | Problem | Fix |
 |---|-----|---------|-----|
-| 12 | `CostCalculator.swift` | Rå XML/function_calls-taggar läckte till användaren | Skapat ResponseCleaner + systempromptrregler |
-| 13 | `AgentEngine.swift` | ResponseCleaner applicerad på 4 output-punkter | clean() på streamingText, assistantMsg, onUpdate, sendChat |
-| 14 | `ContentView.swift` | Agent saknade vy-kontext | Lagt till updateViewContext() + MessageBuilder.currentViewContext |
+| 14 | `CostCalculator.swift` | Rå XML/function_calls-taggar läckte till användaren | Skapat ResponseCleaner + systempromptrregler |
+| 15 | `AgentEngine.swift` | ResponseCleaner applicerad på 4 output-punkter | clean() på streamingText, assistantMsg, onUpdate, sendChat |
+| 16 | `ContentView.swift` | Agent saknade vy-kontext | Lagt till updateViewContext() + MessageBuilder.currentViewContext |
 
 ---
 

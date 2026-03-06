@@ -267,7 +267,10 @@ class ClaudeAPIClient: ObservableObject {
         apiKey: String,
         stream: Bool = true
     ) throws -> URLRequest {
-        var urlRequest = URLRequest(url: URL(string: Constants.API.anthropicBaseURL)!)
+        guard let apiURL = URL(string: Constants.API.anthropicBaseURL) else {
+            throw ClaudeError.invalidResponse
+        }
+        var urlRequest = URLRequest(url: apiURL)
         urlRequest.httpMethod = "POST"
         urlRequest.setValue(apiKey, forHTTPHeaderField: "x-api-key")
         urlRequest.setValue(Constants.API.anthropicVersion, forHTTPHeaderField: "anthropic-version")
