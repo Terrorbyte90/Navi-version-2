@@ -42,6 +42,14 @@ final class ProjectAgent: ObservableObject, Identifiable {
     @Published var lastCostSEK: Double = 0
     @Published var sessionCostSEK: Double = 0
     @Published var activeFileNames: [String] = []
+    @Published var activeCodeSnippet: String = ""
+    @Published var todoItems: [AgentTodoItem] = []
+
+    struct AgentTodoItem: Identifiable {
+        let id = UUID()
+        let text: String
+        let isDone: Bool
+    }
 
     private let engine = AgentEngine()
     private var task: Task<Void, Never>?
@@ -153,6 +161,8 @@ final class ProjectAgent: ObservableObject, Identifiable {
                 )
                 conversation = conv
                 activeFileNames = []
+                activeCodeSnippet = ""
+                todoItems = []
             } else {
                 var conv = conversation
                 await engine.sendChat(
@@ -180,9 +190,8 @@ final class ProjectAgent: ObservableObject, Identifiable {
         }
     }
 
-    /// Parse agent update text to extract current status and active file names.
+    /// Parse agent update text to extract current status, file names, code snippets and TODO items.
     private func parseStatusAndFiles(_ update: String) {
-        // Extract short status from tool updates like "✅ write_file: /path/to/file.swift..."
         let toolNames = ["read_file", "write_file", "move_file", "delete_file", "create_directory",
                          "list_directory", "run_command", "search_files", "build_project", "download_file"]
 
@@ -205,7 +214,7 @@ final class ProjectAgent: ObservableObject, Identifiable {
                 default: break
                 }
 
-                // Extract file path from the update text
+                // Extract file path
                 let parts = update.components(separatedBy: ": ")
                 if parts.count > 1 {
                     let pathStr = parts.dropFirst().joined(separator: ": ")
@@ -214,6 +223,11 @@ final class ProjectAgent: ObservableObject, Identifiable {
                     if !fileName.isEmpty && fileName.contains(".") {
                         detectedFiles = [String(fileName.prefix(40))]
                     }
+                }
+
+                // Extract code snippet for write_file
+                if tool == "write_file" {
+                    extractCodeSnippet(from: update)
                 }
             }
         }
@@ -224,6 +238,59 @@ final class ProjectAgent: ObservableObject, Identifiable {
 
         if !detectedStatus.isEmpty { currentStatus = detectedStatus }
         if !detectedFiles.isEmpty { activeFileNames = detectedFiles }
+
+        // Parse TODO items from streaming text
+        parseTodoItems(from: update)
+    }
+
+    /// Extract a brief code snippet from write_file content for the live preview card.
+    private func extractCodeSnippet(from update: String) {
+        // Look for content between "content" parameter markers or code blocks
+        let lines = update.components(separatedBy: "\n")
+        // Find lines that look like code (indented, contain common code patterns)
+        let codeLines = lines.filter { line in
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            return !trimmed.isEmpty &&
+                   !trimmed.hasPrefix("✅") &&
+                   !trimmed.hasPrefix("⚙️") &&
+                   (trimmed.contains("func ") || trimmed.contains("let ") || trimmed.contains("var ") ||
+                    trimmed.contains("import ") || trimmed.contains("class ") || trimmed.contains("struct ") ||
+                    trimmed.contains("return ") || trimmed.contains("{") || trimmed.contains("}") ||
+                    trimmed.contains("//") || trimmed.contains("guard ") || trimmed.contains("if ") ||
+                    trimmed.hasPrefix(".") || trimmed.hasPrefix("@") ||
+                    trimmed.contains("def ") || trimmed.contains("const ") || trimmed.contains("function "))
+        }
+        if !codeLines.isEmpty {
+            activeCodeSnippet = codeLines.prefix(5).joined(separator: "\n")
+        }
+    }
+
+    /// Parse TODO/checklist items from streaming text.
+    private func parseTodoItems(from text: String) {
+        let lines = text.components(separatedBy: "\n")
+        var items: [AgentTodoItem] = []
+
+        for line in lines {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            // Match "- [ ] task" or "- [x] task" patterns
+            if trimmed.hasPrefix("- [x] ") || trimmed.hasPrefix("- [X] ") {
+                let taskText = String(trimmed.dropFirst(6))
+                if !taskText.isEmpty { items.append(AgentTodoItem(text: taskText, isDone: true)) }
+            } else if trimmed.hasPrefix("- [ ] ") {
+                let taskText = String(trimmed.dropFirst(6))
+                if !taskText.isEmpty { items.append(AgentTodoItem(text: taskText, isDone: false)) }
+            }
+            // Match numbered lists like "1. ✅ task" or "1. task"
+            else if let match = trimmed.range(of: #"^\d+\.\s*✅\s*"#, options: .regularExpression) {
+                let taskText = String(trimmed[match.upperBound...])
+                if !taskText.isEmpty { items.append(AgentTodoItem(text: taskText, isDone: true)) }
+            } else if let match = trimmed.range(of: #"^\d+\.\s*⬜\s*"#, options: .regularExpression) {
+                let taskText = String(trimmed[match.upperBound...])
+                if !taskText.isEmpty { items.append(AgentTodoItem(text: taskText, isDone: false)) }
+            }
+        }
+
+        if !items.isEmpty { todoItems = items }
     }
 
     func stop() {

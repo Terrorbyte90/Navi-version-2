@@ -32,7 +32,9 @@ struct ChatView: View {
                             StreamingBubble(
                                 text: agent.streamingText,
                                 statusMessage: agent.currentStatus,
-                                activeFiles: agent.activeFileNames
+                                activeFiles: agent.activeFileNames,
+                                codeSnippet: agent.activeCodeSnippet,
+                                todoItems: agent.todoItems
                             )
                             .id("streaming")
                         } else if agent.isRunning {
@@ -590,6 +592,8 @@ struct StreamingBubble: View {
     let text: String
     var statusMessage: String = ""
     var activeFiles: [String] = []
+    var codeSnippet: String = ""
+    var todoItems: [ProjectAgent.AgentTodoItem] = []
     @StateObject private var buffer = StreamingBuffer()
     @State private var cursorVisible = true
 
@@ -604,12 +608,27 @@ struct StreamingBubble: View {
                     ActivityStatusBar(status: statusMessage, files: activeFiles)
                 }
 
+                // File activity card — shows file being edited with code preview
+                if let file = activeFiles.first, !codeSnippet.isEmpty {
+                    FileActivityCard(
+                        fileName: file,
+                        status: statusMessage.isEmpty ? "Redigerar…" : statusMessage,
+                        codeSnippet: codeSnippet
+                    )
+                    .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                }
+
+                // TODO list card — shows agent task checklist
+                if !todoItems.isEmpty {
+                    AgentTodoCard(items: todoItems.map { .init(text: $0.text, isDone: $0.isDone) })
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                }
+
                 if text.isEmpty && buffer.displayText.isEmpty {
                     TypingIndicator()
                         .padding(.top, 4)
                 } else {
                     VStack(alignment: .leading, spacing: 4) {
-                        // Render with markdown support during streaming
                         MarkdownTextView(text: buffer.displayText)
                             .equatable()
                             .textSelection(.enabled)
@@ -631,6 +650,8 @@ struct StreamingBubble: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
+        .animation(.easeInOut(duration: 0.25), value: activeFiles)
+        .animation(.easeInOut(duration: 0.25), value: todoItems.count)
         .onAppear {
             withAnimation(.easeInOut(duration: 0.5).repeatForever(autoreverses: true)) {
                 cursorVisible = false
@@ -650,42 +671,61 @@ struct StreamingBubble: View {
 struct ActivityStatusBar: View {
     let status: String
     let files: [String]
+    var codeSnippet: String = ""
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            if !status.isEmpty {
-                HStack(spacing: 6) {
-                    ProgressView()
-                        .scaleEffect(0.5)
-                        .frame(width: 12, height: 12)
-                    Text(status)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(.accentEon)
-                        .lineLimit(1)
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 8) {
+                if !status.isEmpty {
+                    HStack(spacing: 6) {
+                        ProgressView()
+                            .scaleEffect(0.5)
+                            .frame(width: 12, height: 12)
+                        Text(status)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(.accentEon)
+                            .lineLimit(1)
+                    }
+                }
+
+                Spacer()
+
+                if !files.isEmpty {
+                    HStack(spacing: 4) {
+                        Image(systemName: "doc.text.fill")
+                            .font(.system(size: 10))
+                            .foregroundColor(.accentEon.opacity(0.5))
+                        Text(files.joined(separator: ", "))
+                            .font(.system(size: 11, weight: .medium, design: .monospaced))
+                            .foregroundColor(.primary.opacity(0.6))
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
                 }
             }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
 
-            if !files.isEmpty {
-                HStack(spacing: 4) {
-                    Image(systemName: "doc.text.fill")
-                        .font(.system(size: 10))
-                        .foregroundColor(.secondary.opacity(0.6))
-                    Text(files.joined(separator: ", "))
-                        .font(.system(size: 11, design: .monospaced))
-                        .foregroundColor(.secondary.opacity(0.7))
-                        .lineLimit(1)
-                        .truncationMode(.middle)
+            // Code snippet preview — brief glimpse of what's being written
+            if !codeSnippet.isEmpty {
+                Divider().opacity(0.08)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    Text(codeSnippet)
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundColor(.secondary.opacity(0.5))
+                        .lineLimit(3)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
                 }
+                .frame(maxHeight: 48)
             }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
         .background(
             RoundedRectangle(cornerRadius: 8)
-                .fill(Color.accentEon.opacity(0.06))
+                .fill(Color.accentEon.opacity(0.04))
                 .overlay(
                     RoundedRectangle(cornerRadius: 8)
-                        .strokeBorder(Color.accentEon.opacity(0.12), lineWidth: 0.5)
+                        .strokeBorder(Color.accentEon.opacity(0.1), lineWidth: 0.5)
                 )
         )
     }
@@ -696,6 +736,7 @@ struct ActivityStatusBar: View {
 struct ToolActionBadge: View {
     let toolName: String
     let input: [String: AnyCodable]
+    @State private var isExpanded = false
 
     private var icon: String {
         switch toolName {
@@ -731,10 +772,15 @@ struct ToolActionBadge: View {
         }
     }
 
-    private var detail: String {
+    private var fileName: String {
         if let path = input["path"]?.value as? String {
             return (path as NSString).lastPathComponent
         }
+        return ""
+    }
+
+    private var detail: String {
+        if !fileName.isEmpty { return fileName }
         if let cmd = input["cmd"]?.value as? String {
             return String(cmd.prefix(40))
         }
@@ -744,29 +790,182 @@ struct ToolActionBadge: View {
         return ""
     }
 
+    /// Code preview for write_file actions (first ~8 lines)
+    private var codePreview: String? {
+        guard toolName == "write_file",
+              let content = input["content"]?.value as? String,
+              !content.isEmpty
+        else { return nil }
+        let lines = content.components(separatedBy: "\n")
+        let preview = lines.prefix(8).joined(separator: "\n")
+        return preview + (lines.count > 8 ? "\n  …(\(lines.count) rader)" : "")
+    }
+
+    /// File extension for syntax hint
+    private var fileExtension: String {
+        let ext = (fileName as NSString).pathExtension.lowercased()
+        return ext.isEmpty ? "code" : ext
+    }
+
     var body: some View {
-        HStack(spacing: 6) {
-            Image(systemName: icon)
-                .font(.system(size: 11))
-                .foregroundColor(.accentEon.opacity(0.7))
-            Text(label)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundColor(.secondary.opacity(0.8))
-            if !detail.isEmpty {
-                Text(detail)
-                    .font(.system(size: 12, design: .monospaced))
-                    .foregroundColor(.secondary.opacity(0.6))
-                    .lineLimit(1)
+        VStack(alignment: .leading, spacing: 0) {
+            // Action header
+            Button {
+                if codePreview != nil {
+                    withAnimation(.easeInOut(duration: 0.2)) { isExpanded.toggle() }
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: icon)
+                        .font(.system(size: 11))
+                        .foregroundColor(.accentEon.opacity(0.7))
+                    Text(label)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(.secondary.opacity(0.8))
+                    if !detail.isEmpty {
+                        Text(detail)
+                            .font(.system(size: 12, weight: .medium, design: .monospaced))
+                            .foregroundColor(.primary.opacity(0.7))
+                            .lineLimit(1)
+                    }
+                    Spacer()
+                    if codePreview != nil {
+                        Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                            .font(.system(size: 9))
+                            .foregroundColor(.secondary.opacity(0.4))
+                    }
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+            }
+            .buttonStyle(.plain)
+
+            // Expandable code preview
+            if isExpanded, let preview = codePreview {
+                Divider().opacity(0.1)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    Text(preview)
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundColor(.secondary.opacity(0.7))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 8)
+                }
+                .frame(maxHeight: 140)
+                .background(Color.codeBackground.opacity(0.5))
             }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 5)
         .background(
             RoundedRectangle(cornerRadius: 8)
-                .fill(Color.accentEon.opacity(0.05))
+                .fill(Color.accentEon.opacity(0.04))
                 .overlay(
                     RoundedRectangle(cornerRadius: 8)
                         .strokeBorder(Color.accentEon.opacity(0.1), lineWidth: 0.5)
+                )
+        )
+    }
+}
+
+// MARK: - File Activity Card (shows file being edited with live code preview during streaming)
+
+struct FileActivityCard: View {
+    let fileName: String
+    let status: String
+    let codeSnippet: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // File header
+            HStack(spacing: 8) {
+                Image(systemName: "doc.text.fill")
+                    .font(.system(size: 12))
+                    .foregroundColor(.accentEon)
+                Text(fileName)
+                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                    .foregroundColor(.primary.opacity(0.8))
+                Spacer()
+                Text(status)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(.accentEon)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Color.accentEon.opacity(0.1))
+                    .cornerRadius(4)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+
+            if !codeSnippet.isEmpty {
+                Divider().opacity(0.08)
+                // Code snippet that "swishes by"
+                ScrollView(.horizontal, showsIndicators: false) {
+                    Text(codeSnippet)
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundColor(.secondary.opacity(0.6))
+                        .lineLimit(4)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                }
+                .frame(maxHeight: 72)
+            }
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color.codeBackground.opacity(0.6))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .strokeBorder(Color.accentEon.opacity(0.08), lineWidth: 0.5)
+                )
+        )
+    }
+}
+
+// MARK: - Agent TODO List Card (displays agent task progress)
+
+struct AgentTodoCard: View {
+    let items: [TodoItem]
+
+    struct TodoItem: Identifiable {
+        let id = UUID()
+        let text: String
+        let isDone: Bool
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                Image(systemName: "checklist")
+                    .font(.system(size: 12))
+                    .foregroundColor(.accentEon)
+                Text("Uppgifter")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.primary.opacity(0.8))
+                Spacer()
+                let done = items.filter(\.isDone).count
+                Text("\(done)/\(items.count)")
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundColor(.secondary)
+            }
+
+            ForEach(items) { item in
+                HStack(spacing: 8) {
+                    Image(systemName: item.isDone ? "checkmark.circle.fill" : "circle")
+                        .font(.system(size: 12))
+                        .foregroundColor(item.isDone ? .green : .secondary.opacity(0.4))
+                    Text(item.text)
+                        .font(.system(size: 12))
+                        .foregroundColor(item.isDone ? .secondary : .primary.opacity(0.8))
+                        .strikethrough(item.isDone, color: .secondary.opacity(0.3))
+                        .lineLimit(2)
+                }
+            }
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color.surfaceHover.opacity(0.4))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .strokeBorder(Color.dividerColor.opacity(0.2), lineWidth: 0.5)
                 )
         )
     }

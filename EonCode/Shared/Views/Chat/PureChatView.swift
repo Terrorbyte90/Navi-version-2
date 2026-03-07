@@ -140,6 +140,8 @@ struct PureChatView: View {
     @State private var scrollProxy: ScrollViewProxy?
     @FocusState private var inputFocused: Bool
 
+    @StateObject private var projectStore = ProjectStore.shared
+
     var conversation: ChatConversation? { manager.activeConversation }
 
     var body: some View {
@@ -150,6 +152,14 @@ struct PureChatView: View {
                 ScrollViewReader { proxy in
                     ScrollView {
                         LazyVStack(spacing: 0) {
+                            // Context banner — shows active project/repo awareness
+                            if let project = projectStore.activeProject {
+                                ProjectContextBanner(project: project)
+                                    .padding(.horizontal, 16)
+                                    .padding(.top, 8)
+                                    .padding(.bottom, 4)
+                            }
+
                             ForEach(conv.messages) { msg in
                                 PureChatBubble(message: msg)
                                     .id(msg.id)
@@ -611,6 +621,53 @@ struct PureChatBubble: View {
 #Preview("PureChatView") {
     PureChatView()
         .frame(width: 500, height: 600)
+}
+
+// MARK: - Project Context Banner
+
+struct ProjectContextBanner: View {
+    let project: EonProject
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Circle()
+                .fill(project.color.color)
+                .frame(width: 8, height: 8)
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(project.name)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.primary.opacity(0.8))
+                    .lineLimit(1)
+
+                if let repo = project.githubRepoFullName {
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.triangle.branch")
+                            .font(.system(size: 9))
+                        Text(project.githubBranch ?? repo)
+                            .font(.system(size: 10))
+                    }
+                    .foregroundColor(.secondary.opacity(0.6))
+                }
+            }
+
+            Spacer()
+
+            Image(systemName: "link")
+                .font(.system(size: 10))
+                .foregroundColor(.secondary.opacity(0.3))
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color.surfaceHover.opacity(0.5))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .strokeBorder(Color.dividerColor.opacity(0.3), lineWidth: 0.5)
+                )
+        )
+    }
 }
 
 // MARK: - Markdown text renderer

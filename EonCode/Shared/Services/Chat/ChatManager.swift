@@ -66,9 +66,25 @@ final class ChatManager: ObservableObject {
         // Build API messages
         let apiMessages = buildAPIMessages(from: conversation)
 
-        // Build system prompt with memories
+        // Build system prompt with memories + active project context
         let memoryCtx = MemoryManager.shared.memoryContext()
-        let systemPrompt = "Du är en hjälpsam AI-assistent.\(memoryCtx)"
+        var systemPrompt = "Du är Navi — en kunnig AI-assistent specialiserad på kodning, design och teknik. Var koncis och professionell. Gå rakt på sak — skriv korta, tydliga svar. Tänk högt kort vid komplexa frågor.\(memoryCtx)"
+
+        // Inject active project context so the chat knows about cloned repos
+        if let project = ProjectStore.shared.activeProject {
+            systemPrompt += "\n\nAktivt projekt: \(project.name)"
+            if let repo = project.githubRepoFullName {
+                systemPrompt += " (GitHub: \(repo))"
+                if let branch = project.githubBranch {
+                    systemPrompt += " på branch \(branch)"
+                }
+            }
+        }
+
+        // View context
+        if !MessageBuilder.currentViewContext.isEmpty {
+            systemPrompt += "\n\nAKTIV VY: \(MessageBuilder.currentViewContext)"
+        }
 
         isStreaming = true
         streamingText = ""

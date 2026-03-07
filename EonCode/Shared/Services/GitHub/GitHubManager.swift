@@ -584,11 +584,25 @@ final class GitHubManager: ObservableObject {
 
     func openAsProject(repo: GitHubRepo) async -> EonProject? {
         guard let localPath = await cloneOrOpen(repo: repo) else { return nil }
+
+        // Check if this repo is already linked to an existing project
+        if let existing = ProjectStore.shared.projects.first(where: { $0.githubRepoFullName == repo.fullName }) {
+            var updated = existing
+            updated.rootPath = localPath
+            updated.githubBranch = repo.currentBranch
+            await ProjectStore.shared.save(updated)
+            ProjectStore.shared.activeProject = updated
+            NotificationCenter.default.post(name: .didOpenGitHubProject, object: nil)
+            return updated
+        }
+
         var project = EonProject(name: repo.name, rootPath: localPath)
         project.githubRepoFullName = repo.fullName
         project.githubBranch = repo.currentBranch
         await ProjectStore.shared.save(project)
         ProjectStore.shared.activeProject = project
+        // Notify UI to switch to project tab
+        NotificationCenter.default.post(name: .didOpenGitHubProject, object: nil)
         return project
     }
 
@@ -718,4 +732,8 @@ enum GitHubError: LocalizedError {
 
 private struct GitHubAPIError: Codable {
     let message: String
+}
+
+extension Notification.Name {
+    static let didOpenGitHubProject = Notification.Name("didOpenGitHubProject")
 }

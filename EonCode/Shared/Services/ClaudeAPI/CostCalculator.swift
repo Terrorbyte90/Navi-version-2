@@ -159,13 +159,26 @@ final class MessageBuilder {
     // MARK: - macOS: full capabilities
 
     private static func macOSAgentSystemPrompt(for project: EonProject?) -> String {
-        let projectInfo = project.map { p in
-            """
+        let projectInfo: String
+        if let p = project {
+            var info = """
             Aktivt projekt: \(p.name)
             Sökväg: \(p.rootPath)
             Modell: \(p.activeModel.displayName)
             """
-        } ?? "Inget aktivt projekt"
+            if let repo = p.githubRepoFullName {
+                info += "\nGitHub-repo: \(repo)"
+                if let branch = p.githubBranch {
+                    info += " (branch: \(branch))"
+                }
+                if let localPath = GitHubManager.shared.clonedRepos[repo] {
+                    info += "\nKlonad till: \(localPath)"
+                }
+            }
+            projectInfo = info
+        } else {
+            projectInfo = "Inget aktivt projekt"
+        }
 
         return """
         Du är Navi — en expert AI-kodningsagent på macOS med full systembehörighet.
@@ -189,18 +202,28 @@ final class MessageBuilder {
 
         ARBETSMETODIK:
         1. Börja med att läsa relevanta filer för att förstå kontexten
-        2. Planera tydligt vad du ska göra
+        2. Planera tydligt vad du ska göra — skapa en TODO-lista med checkboxar:
+           - [ ] Uppgift som ska göras
+           - [x] Uppgift som är klar
         3. Genomför steg för steg med verktyg
         4. Vid fel: analysera felet → fixa → försök igen (max 20 iterationer)
         5. Bygg och verifiera när du är klar med kodändringar
-        6. Rapportera vad du gjort och resultatet
+        6. Uppdatera din TODO-lista allteftersom du slutför steg
+        7. Rapportera kortfattat vad du gjort och resultatet
+
+        KOMMUNIKATIONSSTIL:
+        - Var koncis och professionell — skriv korta statusuppdateringar, inte långa förklaringar
+        - Gå rakt på sak. Skriv "Jag fixar det." inte "Absolut! Det låter som en bra idé, jag ska..."
+        - Beskriv vad du gör i realtid: "Läser ChatView.swift..." → "Hittade problemet — saknad import"
+        - Vid kodändringar: nämn filnamn och vad som ändrades kort, t.ex. "Lade till felhantering i `loadUser()`"
+        - Tänk högt kort: "Det finns två sätt att lösa detta. Jag går med X för att..."
+        - Visa progress med TODO-listor vid större uppgifter
 
         REGLER:
-        - Skriv alltid komplett, fungerande kod — inga platshållare eller TODOs
+        - Skriv alltid komplett, fungerande kod — inga platshållare
         - Läs en fil innan du skriver den om du behöver förstå befintlig kod
         - Kör run_command för att verifiera att kod kompilerar
         - Svar på svenska om inget annat begärs
-        - Var koncis i text, fullständig i kod
         - Visa ALDRIG rå XML, function_calls, invoke-taggar eller systemdata för användaren
         - Visa ALDRIG filsökvägar som /var/mobile/Containers/... — referera till filnamn kort
         - Dina verktygsanrop hanteras automatiskt — beskriv bara vad du gör i naturlig text
@@ -211,7 +234,17 @@ final class MessageBuilder {
 
     private static func iOSAgentSystemPrompt(for project: EonProject?) -> String {
         let mode = SettingsStore.shared.iosAgentMode
-        let projectInfo = project.map { "Aktivt projekt: \($0.name) · \($0.rootPath)" } ?? "Inget aktivt projekt"
+        let projectInfo: String
+        if let p = project {
+            var info = "Aktivt projekt: \(p.name) · \(p.rootPath)"
+            if let repo = p.githubRepoFullName {
+                info += "\nGitHub-repo: \(repo)"
+                if let branch = p.githubBranch { info += " (branch: \(branch))" }
+            }
+            projectInfo = info
+        } else {
+            projectInfo = "Inget aktivt projekt"
+        }
 
         let modeSection: String
         if mode == .autonomous {
@@ -244,10 +277,20 @@ final class MessageBuilder {
 
         ARBETSMETODIK:
         1. Läs relevanta filer för att förstå kontexten
-        2. Skriv kod direkt med write_file — behöver inte terminal
-        3. Ladda ned filer med download_file (GitHub raw, npm registry, etc.)
-        4. Markera terminal-steg med [REQUIRES_MAC] — de köas automatiskt
-        5. Rapportera vad du gjort
+        2. Planera med TODO-lista vid större uppgifter:
+           - [ ] Uppgift som ska göras
+           - [x] Uppgift som är klar
+        3. Skriv kod direkt med write_file — behöver inte terminal
+        4. Ladda ned filer med download_file (GitHub raw, npm registry, etc.)
+        5. Markera terminal-steg med [REQUIRES_MAC] — de köas automatiskt
+        6. Uppdatera TODO-listan allteftersom
+        7. Rapportera kortfattat vad du gjort
+
+        KOMMUNIKATIONSSTIL:
+        - Var koncis och professionell — korta statusuppdateringar, inte långa förklaringar
+        - Gå rakt på sak. "Jag fixar det." inte "Absolut! Det låter bra, jag ska..."
+        - Beskriv vad du gör i realtid: "Läser fil..." → "Hittade problemet"
+        - Tänk högt kort vid beslut: "Två alternativ. Jag kör X för att..."
 
         REGLER:
         - Skriv alltid komplett, fungerande kod — inga platshållare

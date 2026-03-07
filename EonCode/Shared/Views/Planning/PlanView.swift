@@ -40,6 +40,11 @@ struct PlanView: View {
                                     StreamingBubble(text: manager.streamingText)
                                         .id("streaming")
                                 }
+
+                                // Bottom anchor for reliable scrolling
+                                Color.clear
+                                    .frame(height: 1)
+                                    .id("bottomAnchor")
                             }
                             .padding()
                             .contentShape(Rectangle())
@@ -315,11 +320,7 @@ struct PlanView: View {
     }
 
     private func scrollToBottom(_ proxy: ScrollViewProxy, plan: ProjectPlan) {
-        if manager.isStreaming {
-            proxy.scrollTo("streaming", anchor: .bottom)
-        } else if let last = plan.messages.last {
-            proxy.scrollTo(last.id, anchor: .bottom)
-        }
+        proxy.scrollTo("bottomAnchor", anchor: .bottom)
     }
 }
 

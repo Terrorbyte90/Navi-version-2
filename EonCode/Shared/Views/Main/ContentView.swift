@@ -123,6 +123,13 @@ struct ContentView: View {
             updateViewContext()
         }
         .onChange(of: selectedTab) { updateViewContext() }
+        .onReceive(NotificationCenter.default.publisher(for: .didOpenGitHubProject)) { _ in
+            // Auto-switch to project tab when a GitHub repo is opened as project
+            withAnimation(.easeInOut(duration: 0.25)) {
+                selectedTab = .project
+                showSidebar = false
+            }
+        }
     }
 
     private func updateViewContext() {
