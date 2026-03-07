@@ -155,9 +155,14 @@ struct PureChatView: View {
                                     .id(msg.id)
                             }
                             if manager.isStreaming {
-                                StreamingBubble(text: ResponseCleaner.clean(manager.streamingText))
+                                StreamingBubble(text: manager.streamingText)
                                     .id("streaming")
                             }
+
+                            // Bottom anchor for reliable scrolling
+                            Color.clear
+                                .frame(height: 1)
+                                .id("bottomAnchor")
                         }
                         .padding(.vertical, 16)
                         .contentShape(Rectangle())
@@ -481,11 +486,8 @@ struct PureChatView: View {
 
     private func scrollToBottom(_ proxy: ScrollViewProxy, animated: Bool = false) {
         let action = {
-            if manager.isStreaming {
-                proxy.scrollTo("streaming", anchor: .bottom)
-            } else if let last = manager.activeConversation?.messages.last {
-                proxy.scrollTo(last.id, anchor: .bottom)
-            }
+            // Always scroll to the bottom anchor — avoids blank-space issues
+            proxy.scrollTo("bottomAnchor", anchor: .bottom)
         }
         if animated { withAnimation(.easeOut(duration: 0.15)) { action() } }
         else { action() }
@@ -532,7 +534,7 @@ struct PureChatBubble: View {
                     .padding(.top, 2)
 
                 VStack(alignment: .leading, spacing: 8) {
-                    MarkdownTextView(text: message.content)
+                    MarkdownTextView(text: ResponseCleaner.clean(message.content))
                         .equatable()
                         .textSelection(.enabled)
 

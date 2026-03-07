@@ -29,12 +29,33 @@ struct ChatView: View {
                         }
 
                         if agent.isRunning && !agent.streamingText.isEmpty {
-                            StreamingBubble(text: agent.streamingText)
-                                .id("streaming")
+                            StreamingBubble(
+                                text: agent.streamingText,
+                                statusMessage: agent.currentStatus,
+                                activeFiles: agent.activeFileNames
+                            )
+                            .id("streaming")
                         } else if agent.isRunning {
-                            TypingIndicator()
-                                .id("typing")
+                            HStack(alignment: .top, spacing: 12) {
+                                AssistantAvatar()
+                                    .padding(.top, 2)
+                                VStack(alignment: .leading, spacing: 6) {
+                                    if !agent.currentStatus.isEmpty {
+                                        ActivityStatusBar(status: agent.currentStatus, files: agent.activeFileNames)
+                                    }
+                                    TypingIndicator()
+                                }
+                                Spacer(minLength: 40)
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
+                            .id("typing")
                         }
+
+                        // Bottom anchor for reliable scrolling
+                        Color.clear
+                            .frame(height: 1)
+                            .id("bottomAnchor")
                     }
                     .padding(.vertical, 16)
                     .contentShape(Rectangle())
@@ -66,7 +87,7 @@ struct ChatView: View {
                     scrollToBottom(proxy: proxy, animated: true)
                 }
                 .onChange(of: agent.streamingText) { _ in
-                    // No animation during streaming — avoids layout thrash
+                    // Throttled scroll during streaming — avoids layout thrash
                     scrollToBottom(proxy: proxy, animated: false)
                 }
                 .onAppear {
@@ -110,11 +131,8 @@ struct ChatView: View {
     }
 
     private func _scroll(_ proxy: ScrollViewProxy) {
-        if agent.isRunning {
-            proxy.scrollTo("streaming", anchor: .bottom)
-        } else if let last = agent.conversation.messages.last {
-            proxy.scrollTo(last.id, anchor: .bottom)
-        }
+        // Always scroll to the bottom anchor to avoid blank-space issues
+        proxy.scrollTo("bottomAnchor", anchor: .bottom)
     }
 }
 
@@ -399,14 +417,19 @@ struct MessageBubble: View {
             ForEach(Array(message.content.enumerated()), id: \.offset) { _, content in
                 switch content {
                 case .text(let t):
-                    if containsCode(t) {
-                        renderTextWithCodeBlocks(t)
-                    } else {
-                        Text(t)
-                            .font(.system(size: 15))
-                            .foregroundColor(.primary)
-                            .lineSpacing(4)
-                            .textSelection(.enabled)
+                    let cleaned = ResponseCleaner.clean(t)
+                    if !cleaned.isEmpty {
+                        if message.role == .user {
+                            Text(cleaned)
+                                .font(.system(size: 15))
+                                .foregroundColor(.primary)
+                                .lineSpacing(4)
+                                .textSelection(.enabled)
+                        } else {
+                            MarkdownTextView(text: cleaned)
+                                .equatable()
+                                .textSelection(.enabled)
+                        }
                     }
                 case .image(let data, _):
                     if let uiImage = PlatformImage(data: data) {
@@ -416,88 +439,31 @@ struct MessageBubble: View {
                             .frame(maxWidth: 280)
                             .cornerRadius(12)
                     }
-                case .toolUse(_, let name, _):
-                    HStack(spacing: 6) {
-                        Image(systemName: "wrench.fill")
-                            .font(.system(size: 11))
-                            .foregroundColor(.secondary)
-                        Text(name)
-                            .font(.system(size: 13))
-                            .foregroundColor(.secondary)
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(Color.white.opacity(0.04))
-                    .cornerRadius(8)
+                case .toolUse(_, let name, let input):
+                    ToolActionBadge(toolName: name, input: input)
                 case .toolResult(_, let result, let isError):
-                    Text(result.prefix(300))
-                        .font(.system(size: 13, design: .monospaced))
-                        .foregroundColor(isError ? .red : .secondary)
-                        .lineLimit(8)
+                    if isError {
+                        HStack(spacing: 6) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .font(.system(size: 11))
+                                .foregroundColor(.red)
+                            Text(result.prefix(200))
+                                .font(.system(size: 12))
+                                .foregroundColor(.red.opacity(0.8))
+                                .lineLimit(3)
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(Color.red.opacity(0.06))
+                        .cornerRadius(8)
+                    }
+                    // Hide successful tool results — the user cares about the outcome text, not raw output
                 }
             }
         }
     }
 
-    private func containsCode(_ text: String) -> Bool {
-        text.contains("```")
-    }
-
-    @ViewBuilder
-    private func renderTextWithCodeBlocks(_ text: String) -> some View {
-        let parts = parseCodeBlocks(text)
-        ForEach(Array(parts.enumerated()), id: \.offset) { _, part in
-            if part.isCode {
-                CodeBlockView(code: part.content, language: part.language)
-            } else if !part.content.trimmed.isEmpty {
-                Text(part.content)
-                    .font(.system(size: 15))
-                    .foregroundColor(.primary)
-                    .lineSpacing(4)
-                    .textSelection(.enabled)
-            }
-        }
-    }
-
-    private func parseCodeBlocks(_ text: String) -> [TextPart] {
-        var parts: [TextPart] = []
-        let lines = text.components(separatedBy: "\n")
-        var currentText = ""
-        var currentCode = ""
-        var currentLang = ""
-        var inCode = false
-
-        for line in lines {
-            if line.hasPrefix("```") && !inCode {
-                if !currentText.isEmpty {
-                    parts.append(TextPart(content: currentText, isCode: false, language: nil))
-                    currentText = ""
-                }
-                currentLang = String(line.dropFirst(3)).trimmed
-                inCode = true
-            } else if line.hasPrefix("```") && inCode {
-                parts.append(TextPart(content: currentCode, isCode: true, language: currentLang.isEmpty ? nil : currentLang))
-                currentCode = ""
-                currentLang = ""
-                inCode = false
-            } else if inCode {
-                currentCode += line + "\n"
-            } else {
-                currentText += line + "\n"
-            }
-        }
-
-        if !currentText.isEmpty { parts.append(TextPart(content: currentText, isCode: false, language: nil)) }
-        if !currentCode.isEmpty { parts.append(TextPart(content: currentCode, isCode: true, language: nil)) }
-
-        return parts
-    }
-
-    struct TextPart {
-        let content: String
-        let isCode: Bool
-        let language: String?
-    }
+    // Code block parsing is now handled by MarkdownTextView
 }
 
 // MARK: - Code Block View (ChatGPT style)
@@ -569,52 +535,61 @@ struct CodeBlockView: View {
 
 // MARK: - Smooth streaming buffer
 
-/// Reveals streaming tokens smoothly. Runs at 60fps, reveals up to 18 chars/tick
-/// so fast responses feel instant while still animating nicely.
+/// Reveals streaming tokens smoothly. Runs at 30fps, reveals large chunks per tick
+/// so fast API responses appear near-instantly while still animating nicely.
+/// Also cleans internal tags in real-time so the user never sees raw XML.
 @MainActor
 final class StreamingBuffer: ObservableObject {
     @Published private(set) var displayText: String = ""
 
     private var targetText: String = ""
+    private var cleanedTarget: String = ""
     private var timer: Timer?
-    // 18 chars @ 60fps = ~1080 chars/sec — fast enough to feel instant
-    private let charsPerTick: Int = 18
+    // 80 chars @ 30fps = ~2400 chars/sec — feels instant for most responses
+    private let charsPerTick: Int = 80
+    private let fps: Double = 30.0
 
     func update(_ newText: String) {
         targetText = newText
+        cleanedTarget = ResponseCleaner.clean(newText)
         if timer == nil {
-            timer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
+            timer = Timer.scheduledTimer(withTimeInterval: 1.0 / fps, repeats: true) { [weak self] _ in
                 Task { @MainActor [weak self] in self?.tick() }
             }
         }
     }
 
     func flush() {
-        displayText = targetText
+        cleanedTarget = ResponseCleaner.clean(targetText)
+        displayText = cleanedTarget
         timer?.invalidate()
         timer = nil
     }
 
     private func tick() {
-        guard displayText.count < targetText.count else {
-            if displayText == targetText {
+        guard displayText.count < cleanedTarget.count else {
+            if displayText == cleanedTarget {
                 timer?.invalidate()
                 timer = nil
+            } else {
+                displayText = cleanedTarget
             }
             return
         }
-        let endIndex = targetText.index(
-            targetText.startIndex,
-            offsetBy: min(displayText.count + charsPerTick, targetText.count)
+        let endIndex = cleanedTarget.index(
+            cleanedTarget.startIndex,
+            offsetBy: min(displayText.count + charsPerTick, cleanedTarget.count)
         )
-        displayText = String(targetText[..<endIndex])
+        displayText = String(cleanedTarget[..<endIndex])
     }
 }
 
-// MARK: - Streaming bubble (smooth, ChatGPT-faithful)
+// MARK: - Streaming bubble (smooth, markdown-aware)
 
 struct StreamingBubble: View {
     let text: String
+    var statusMessage: String = ""
+    var activeFiles: [String] = []
     @StateObject private var buffer = StreamingBuffer()
     @State private var cursorVisible = true
 
@@ -623,23 +598,32 @@ struct StreamingBubble: View {
             AssistantAvatar()
                 .padding(.top, 2)
 
-            if text.isEmpty && buffer.displayText.isEmpty {
-                TypingIndicator()
-                    .padding(.top, 4)
-            } else {
-                HStack(alignment: .lastTextBaseline, spacing: 0) {
-                    Text(buffer.displayText)
-                        .font(.callout)
-                        .foregroundColor(Color.primary)
-                        .lineSpacing(4)
-                        .textSelection(.enabled)
+            VStack(alignment: .leading, spacing: 6) {
+                // Activity status bar — shows what the agent is doing
+                if !statusMessage.isEmpty || !activeFiles.isEmpty {
+                    ActivityStatusBar(status: statusMessage, files: activeFiles)
+                }
 
-                    // Blinking cursor
-                    RoundedRectangle(cornerRadius: 1)
-                        .fill(Color.primary.opacity(0.7))
-                        .frame(width: 2, height: 15)
-                        .opacity(cursorVisible ? 1 : 0)
-                        .padding(.leading, 2)
+                if text.isEmpty && buffer.displayText.isEmpty {
+                    TypingIndicator()
+                        .padding(.top, 4)
+                } else {
+                    VStack(alignment: .leading, spacing: 4) {
+                        // Render with markdown support during streaming
+                        MarkdownTextView(text: buffer.displayText)
+                            .equatable()
+                            .textSelection(.enabled)
+
+                        // Blinking cursor
+                        HStack(spacing: 0) {
+                            Spacer().frame(width: 0)
+                            RoundedRectangle(cornerRadius: 1)
+                                .fill(Color.accentEon.opacity(0.8))
+                                .frame(width: 2, height: 16)
+                                .opacity(cursorVisible ? 1 : 0)
+                        }
+                        .frame(height: 4)
+                    }
                 }
             }
 
@@ -658,6 +642,133 @@ struct StreamingBubble: View {
         .onDisappear {
             buffer.flush()
         }
+    }
+}
+
+// MARK: - Activity Status Bar (shows agent file actions + status)
+
+struct ActivityStatusBar: View {
+    let status: String
+    let files: [String]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            if !status.isEmpty {
+                HStack(spacing: 6) {
+                    ProgressView()
+                        .scaleEffect(0.5)
+                        .frame(width: 12, height: 12)
+                    Text(status)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(.accentEon)
+                        .lineLimit(1)
+                }
+            }
+
+            if !files.isEmpty {
+                HStack(spacing: 4) {
+                    Image(systemName: "doc.text.fill")
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary.opacity(0.6))
+                    Text(files.joined(separator: ", "))
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundColor(.secondary.opacity(0.7))
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color.accentEon.opacity(0.06))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .strokeBorder(Color.accentEon.opacity(0.12), lineWidth: 0.5)
+                )
+        )
+    }
+}
+
+// MARK: - Tool Action Badge (clean display of agent tool usage)
+
+struct ToolActionBadge: View {
+    let toolName: String
+    let input: [String: AnyCodable]
+
+    private var icon: String {
+        switch toolName {
+        case "write_file": return "doc.badge.plus"
+        case "read_file": return "doc.text"
+        case "move_file": return "arrow.right.doc.on.clipboard"
+        case "delete_file": return "trash"
+        case "create_directory": return "folder.badge.plus"
+        case "list_directory": return "folder"
+        case "run_command": return "terminal"
+        case "search_files": return "magnifyingglass"
+        case "build_project": return "hammer"
+        case "download_file": return "arrow.down.circle"
+        case "zip_files": return "doc.zipper"
+        default: return "wrench"
+        }
+    }
+
+    private var label: String {
+        switch toolName {
+        case "write_file": return "Skrev"
+        case "read_file": return "Läste"
+        case "move_file": return "Flyttade"
+        case "delete_file": return "Tog bort"
+        case "create_directory": return "Skapade mapp"
+        case "list_directory": return "Listade"
+        case "run_command": return "Körde"
+        case "search_files": return "Sökte"
+        case "build_project": return "Byggde"
+        case "download_file": return "Laddade ned"
+        case "zip_files": return "Skapade arkiv"
+        default: return toolName
+        }
+    }
+
+    private var detail: String {
+        if let path = input["path"]?.value as? String {
+            return (path as NSString).lastPathComponent
+        }
+        if let cmd = input["cmd"]?.value as? String {
+            return String(cmd.prefix(40))
+        }
+        if let query = input["query"]?.value as? String {
+            return "\"\(query.prefix(30))\""
+        }
+        return ""
+    }
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.system(size: 11))
+                .foregroundColor(.accentEon.opacity(0.7))
+            Text(label)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(.secondary.opacity(0.8))
+            if !detail.isEmpty {
+                Text(detail)
+                    .font(.system(size: 12, design: .monospaced))
+                    .foregroundColor(.secondary.opacity(0.6))
+                    .lineLimit(1)
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color.accentEon.opacity(0.05))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .strokeBorder(Color.accentEon.opacity(0.1), lineWidth: 0.5)
+                )
+        )
     }
 }
 

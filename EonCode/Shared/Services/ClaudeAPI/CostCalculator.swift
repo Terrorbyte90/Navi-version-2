@@ -45,24 +45,35 @@ final class CostCalculator {
 // MARK: - Response cleaner — strips internal XML/system data from agent output
 
 enum ResponseCleaner {
-    /// Strips raw function_calls XML, invoke blocks, and other internal artifacts from response text.
+    /// All XML/internal tags that should never be shown to the user.
+    private static let strippedTags = [
+        "function_calls", "invoke", "parameter",
+        "system-reminder", "task-notification",
+        "antml_thinking", "antml:thinking", "thinking",
+        "antml_invoke", "antml:invoke",
+        "antml_function_calls", "antml:function_calls",
+        "artifact", "result", "tool_call",
+        "search_quality_reflection", "search_quality_score",
+    ]
+
+    /// Strips raw function_calls XML, invoke blocks, thinking blocks, and other internal artifacts from response text.
     static func clean(_ text: String) -> String {
         var result = text
 
-        // Remove <function_calls>...</function_calls> blocks (including nested content)
-        result = removeXMLBlocks(from: result, tag: "function_calls")
+        // Strip all known internal tags
+        for tag in strippedTags {
+            result = removeXMLBlocks(from: result, tag: tag)
+        }
 
-        // Remove standalone <invoke>...</invoke> blocks
-        result = removeXMLBlocks(from: result, tag: "invoke")
+        // Remove orphaned self-closing tags like <thinking/>
+        if let regex = try? NSRegularExpression(pattern: "<[a-zA-Z_:]+\\s*/\\s*>") {
+            result = regex.stringByReplacingMatches(in: result, range: NSRange(result.startIndex..., in: result), withTemplate: "")
+        }
 
-        // Remove <parameter>...</parameter> if any leaked through
-        result = removeXMLBlocks(from: result, tag: "parameter")
-
-        // Remove <system-reminder>...</system-reminder> blocks
-        result = removeXMLBlocks(from: result, tag: "system-reminder")
-
-        // Remove <task-notification>...</task-notification> blocks
-        result = removeXMLBlocks(from: result, tag: "task-notification")
+        // Remove lines that are just XML-like tags (e.g. standalone <thinking> without close)
+        if let regex = try? NSRegularExpression(pattern: "^\\s*</?[a-zA-Z_:]+[^>]*>\\s*$", options: .anchorsMatchLines) {
+            result = regex.stringByReplacingMatches(in: result, range: NSRange(result.startIndex..., in: result), withTemplate: "")
+        }
 
         // Clean up excessive blank lines left after removal
         while result.contains("\n\n\n") {
@@ -74,6 +85,7 @@ enum ResponseCleaner {
 
     private static func removeXMLBlocks(from text: String, tag: String) -> String {
         var result = text
+        // Escape colons for regex-safe matching but use literal string matching
         let openTag = "<\(tag)"
         let closeTag = "</\(tag)>"
 
@@ -81,9 +93,8 @@ enum ResponseCleaner {
             if let closeRange = result.range(of: closeTag, options: .caseInsensitive, range: openRange.lowerBound..<result.endIndex) {
                 result.removeSubrange(openRange.lowerBound..<closeRange.upperBound)
             } else {
-                // No closing tag — remove from open tag to end of line
-                let lineEnd = result[openRange.lowerBound...].firstIndex(of: "\n") ?? result.endIndex
-                result.removeSubrange(openRange.lowerBound..<lineEnd)
+                // No closing tag — remove from open tag to end (partial/streaming tag)
+                result.removeSubrange(openRange.lowerBound..<result.endIndex)
             }
         }
         return result
