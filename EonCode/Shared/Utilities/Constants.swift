@@ -9,7 +9,7 @@ enum Constants {
     }
 
     enum iCloud {
-        static let containerID = "iCloud.com.navi"
+        static let containerID = "iCloud.com.tedsvard.navi"
         static let rootFolder = "Navi"
         static let projectsFolder = "Projects"
         static let instructionsFolder = "Instructions"
@@ -48,12 +48,12 @@ enum Constants {
     }
 
     enum Keychain {
-        static let service = "com.navi.apikeys"
+        static let service = "com.tedsvard.navi.apikeys"
         static let anthropicKey = "anthropic"
         static let elevenLabsKey = "elevenlabs"
         static let muxKey = "mux"
         static let githubKey = "github"
-        static let accessGroup = "com.navi"
+        static let accessGroup = "com.tedsvard.navi"
     }
 
     enum Agent {

@@ -1,6 +1,6 @@
 name: Navi
 options:
-  bundleIdPrefix: com.navi
+  bundleIdPrefix: com.tedsvard.navi
   deploymentTarget:
     iOS: "18.0"
     macOS: "15.0"
@@ -12,6 +12,8 @@ settings:
   base:
     SWIFT_VERSION: 5.9
     ENABLE_HARDENED_RUNTIME: YES
+    DEVELOPMENT_TEAM: DV646H5VDP
+    CODE_SIGN_STYLE: Automatic
 
 configs:
   Debug: debug
@@ -34,11 +36,13 @@ targets:
         optional: true
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.navi.ios
+        PRODUCT_BUNDLE_IDENTIFIER: com.tedsvard.navi.ios
         INFOPLIST_FILE: EonCode/iOS/Info.plist
         CODE_SIGN_ENTITLEMENTS: EonCode/iOS/Navi-iOS.entitlements
         TARGETED_DEVICE_FAMILY: "1,2"
         SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG
+        DEVELOPMENT_TEAM: DV646H5VDP
+        CODE_SIGN_STYLE: Automatic
       configs:
         Debug:
           SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG
@@ -81,10 +85,12 @@ targets:
         optional: true
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.navi.macos
+        PRODUCT_BUNDLE_IDENTIFIER: com.tedsvard.navi.macos
         INFOPLIST_FILE: EonCode/macOS/Info.plist
         CODE_SIGN_ENTITLEMENTS: EonCode/macOS/Navi-macOS.entitlements
         ENABLE_HARDENED_RUNTIME: YES
+        DEVELOPMENT_TEAM: DV646H5VDP
+        CODE_SIGN_STYLE: Automatic
     entitlements:
       path: EonCode/macOS/Navi-macOS.entitlements
     info:
