@@ -68,17 +68,16 @@ final class WorkerAgent: ObservableObject, Identifiable {
                     maxTokens: Constants.Agent.maxTokensDefault,
                     usePromptCaching: false,
                     onEvent: { [weak self] event in
-                        Task { @MainActor in
-                            self?.handleEvent(event,
-                                              fullText: &fullText,
-                                              toolCalls: &toolCalls,
-                                              blockType: &blockType,
-                                              currentToolID: &currentToolID,
-                                              currentToolName: &currentToolName,
-                                              currentToolJSON: &currentToolJSON,
-                                              stopReason: &stopReason)
-                            self?.output = fullText
-                        }
+                        // WorkerAgent is @MainActor — direct mutation, no inner Task needed
+                        self?.handleEvent(event,
+                                          fullText: &fullText,
+                                          toolCalls: &toolCalls,
+                                          blockType: &blockType,
+                                          currentToolID: &currentToolID,
+                                          currentToolName: &currentToolName,
+                                          currentToolJSON: &currentToolJSON,
+                                          stopReason: &stopReason)
+                        self?.output = fullText
                     }
                 )
             } catch {
@@ -100,7 +99,8 @@ final class WorkerAgent: ObservableObject, Identifiable {
             // Execute tools
             var toolResults: [MessageContent] = []
             for tc in toolCalls {
-                let params = tc.input.compactMapValues { $0.value as? String }
+                // Convert all param values to String — Claude can send ints, bools, arrays etc.
+                let params = tc.input.mapValues { String(describing: $0.value) }
                 let result = await executor.execute(name: tc.name, params: params, projectRoot: projectRoot)
 
                 // Track written/modified files

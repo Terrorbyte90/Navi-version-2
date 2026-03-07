@@ -115,7 +115,8 @@ final class PromptQueue: ObservableObject {
     // MARK: - Processing loop
 
     private func startProcessingIfNeeded() {
-        guard processingTask == nil || processingTask!.isCancelled else { return }
+        // processingTask is set to nil at the end of processLoop() — only start if truly idle
+        guard processingTask == nil else { return }
         processingTask = Task { await processLoop() }
     }
 

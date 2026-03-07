@@ -162,11 +162,4 @@ final class MemoryManager: ObservableObject {
     }
 }
 
-// MARK: - SettingsStore memory toggle
-
-extension SettingsStore {
-    var autoExtractMemories: Bool {
-        get { UserDefaults.standard.bool(forKey: "autoExtractMemories") }
-        set { UserDefaults.standard.set(newValue, forKey: "autoExtractMemories") }
-    }
-}
+// autoExtractMemories is now a proper @Published property in SettingsStore

@@ -82,9 +82,10 @@ final class iCloudChatStore: ObservableObject {
 
                 let jsonFiles = files.filter { $0.pathExtension == "json" }
                 var conversations: [ChatConversation] = []
-                let coordinator = NSFileCoordinator()
 
                 for fileURL in jsonFiles {
+                    // Fresh coordinator per file — reusing one instance across multiple calls can deadlock
+                    let coordinator = NSFileCoordinator()
                     var coordError: NSError?
                     coordinator.coordinate(readingItemAt: fileURL, options: [], error: &coordError) { url in
                         if let data = try? Data(contentsOf: url),
@@ -104,7 +105,25 @@ final class iCloudChatStore: ObservableObject {
     func delete(id: UUID) async throws {
         guard let dir = containerURL else { return }
         let fileURL = dir.appendingPathComponent("\(id.uuidString).json")
-        try FileManager.default.removeItem(at: fileURL)
+        guard FileManager.default.fileExists(atPath: fileURL.path) else { return }
+
+        try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
+            DispatchQueue.global(qos: .utility).async {
+                let coordinator = NSFileCoordinator()
+                var coordError: NSError?
+                var blockRan = false
+                coordinator.coordinate(writingItemAt: fileURL, options: .forDeleting, error: &coordError) { url in
+                    blockRan = true
+                    do {
+                        try FileManager.default.removeItem(at: url)
+                        cont.resume()
+                    } catch {
+                        cont.resume(throwing: error)
+                    }
+                }
+                if !blockRan, let err = coordError { cont.resume(throwing: err) }
+            }
+        }
     }
 
     // MARK: - Search

@@ -198,7 +198,8 @@ struct ContentView: View {
                         if let conv = chatMgr.activeConversation,
                            let idx = chatMgr.conversations.firstIndex(where: { $0.id == conv.id }) {
                             chatMgr.conversations[idx].model = model
-                            chatMgr.activeConversation?.model = model
+                            // Replace the whole value — mutating an optional copy has no effect
+                            chatMgr.activeConversation = chatMgr.conversations[idx]
                         }
                     } label: {
                         HStack {

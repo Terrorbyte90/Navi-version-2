@@ -37,11 +37,14 @@ final class SettingsStore: ObservableObject {
     @Published var autoGitHubSync: Bool {
         didSet { save("autoGitHubSync", value: autoGitHubSync) }
     }
+    @Published var autoExtractMemories: Bool {
+        didSet { save("autoExtractMemories", value: autoExtractMemories) }
+    }
 
     private let defaults = UserDefaults.standard
 
     private init() {
-        defaultModel = ClaudeModel(rawValue: UserDefaults.standard.string(forKey: "defaultModel") ?? "") ?? .haiku
+        defaultModel = ClaudeModel(rawValue: UserDefaults.standard.string(forKey: "defaultModel") ?? "") ?? .sonnet45
         ttsEnabled = UserDefaults.standard.bool(forKey: "ttsEnabled")
         darkMode = UserDefaults.standard.value(forKey: "darkMode") as? Bool ?? true
         autoSnapshot = UserDefaults.standard.value(forKey: "autoSnapshot") as? Bool ?? true
@@ -52,6 +55,7 @@ final class SettingsStore: ObservableObject {
         maxParallelWorkers = UserDefaults.standard.integer(forKey: "maxParallelWorkers").nonZero ?? 4
         parallelAgentsEnabled = UserDefaults.standard.value(forKey: "parallelAgentsEnabled") as? Bool ?? true
         autoGitHubSync = UserDefaults.standard.value(forKey: "autoGitHubSync") as? Bool ?? false
+        autoExtractMemories = UserDefaults.standard.value(forKey: "autoExtractMemories") as? Bool ?? true
     }
 
     private func save(_ key: String, value: Any?) {

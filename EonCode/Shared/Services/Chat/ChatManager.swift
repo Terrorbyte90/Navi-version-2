@@ -31,7 +31,8 @@ final class ChatManager: ObservableObject {
 
     // MARK: - New conversation
 
-    func newConversation(model: ClaudeModel = .sonnet45) -> ChatConversation {
+    func newConversation(model: ClaudeModel? = nil) -> ChatConversation {
+        let model = model ?? SettingsStore.shared.defaultModel
         let conv = ChatConversation(model: model)
         conversations.insert(conv, at: 0)
         activeConversation = conv
@@ -77,20 +78,19 @@ final class ChatManager: ObservableObject {
             systemPrompt: systemPrompt,
             tools: nil,
             usePromptCaching: true
-        ) { event in
-            Task { @MainActor in
-                switch event {
-                case .contentBlockDelta(_, let delta):
-                    if case .text(let chunk) = delta {
-                        fullText += chunk
-                        self.streamingText = fullText
-                        onToken(chunk)
-                    }
-                case .messageDelta(_, let usage):
-                    finalUsage = usage
-                default:
-                    break
+        ) { [self] event in
+            // ChatManager is @MainActor — no inner Task needed, direct mutation is safe
+            switch event {
+            case .contentBlockDelta(_, let delta):
+                if case .text(let chunk) = delta {
+                    fullText += chunk
+                    self.streamingText = fullText
+                    onToken(chunk)
                 }
+            case .messageDelta(_, let usage):
+                finalUsage = usage
+            default:
+                break
             }
         }
 
@@ -128,8 +128,9 @@ final class ChatManager: ObservableObject {
             conversations[idx] = conversation
         }
 
-        // Extract memories after substantial conversations
-        if conversation.messages.count >= 6 {
+        // Extract memories every 10 new messages (not every single message after the 6th)
+        let msgCount = conversation.messages.count
+        if msgCount >= 6 && msgCount % 10 == 0 {
             let messages = conversation.messages
             let convId = conversation.id
             Task {

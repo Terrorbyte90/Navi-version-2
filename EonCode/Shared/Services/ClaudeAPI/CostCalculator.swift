@@ -9,13 +9,17 @@ final class CostCalculator {
         let inputPrice = model.inputPricePerMTok / 1_000_000
         let outputPrice = model.outputPricePerMTok / 1_000_000
 
-        // Cache reads are cheaper (10% of normal)
+        // Cache reads: 10% of normal input price
         let cacheReadTokens = Double(usage.cacheReadInputTokens ?? 0)
-        let normalInputTokens = Double(usage.inputTokens) - cacheReadTokens
+        // Cache writes: 125% of normal input price (Anthropic pricing)
+        let cacheWriteTokens = Double(usage.cacheCreationInputTokens ?? 0)
+        // Normal input = total input minus cache-read and cache-write tokens
+        let normalInputTokens = Double(usage.inputTokens) - cacheReadTokens - cacheWriteTokens
         let outputTokens = Double(usage.outputTokens)
 
         let usd = (normalInputTokens * inputPrice)
                 + (cacheReadTokens * inputPrice * 0.1)
+                + (cacheWriteTokens * inputPrice * 1.25)
                 + (outputTokens * outputPrice)
 
         let sek = usd * ExchangeRateService.shared.usdToSEK

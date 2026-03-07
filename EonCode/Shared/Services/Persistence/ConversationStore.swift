@@ -55,8 +55,23 @@ final class ConversationStore: ObservableObject {
     func delete(_ conversation: Conversation) async {
         conversations[conversation.projectID]?.removeAll { $0.id == conversation.id }
 
-        if let url = sync.urlForConversation(conversation) {
-            try? FileManager.default.removeItem(at: url)
+        guard let url = sync.urlForConversation(conversation),
+              FileManager.default.fileExists(atPath: url.path) else { return }
+
+        // Use NSFileCoordinator on a background thread to avoid blocking main actor
+        // and to properly coordinate with iCloud's file presenter
+        await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
+            DispatchQueue.global(qos: .utility).async {
+                let coordinator = NSFileCoordinator()
+                var coordError: NSError?
+                var blockRan = false
+                coordinator.coordinate(writingItemAt: url, options: .forDeleting, error: &coordError) { u in
+                    blockRan = true
+                    try? FileManager.default.removeItem(at: u)
+                    cont.resume()
+                }
+                if !blockRan { cont.resume() }
+            }
         }
     }
 

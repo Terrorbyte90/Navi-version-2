@@ -80,14 +80,13 @@ final class ProjectStore: ObservableObject {
     // MARK: - Create
 
     func create(name: String, at path: URL) async -> EonProject {
-        let iCloudPath: String?
-        if let iCloudRoot = sync.projectsRoot {
-            iCloudPath = iCloudRoot.appendingPathComponent(UUID().uuidString).path
-        } else {
-            iCloudPath = nil
-        }
+        // Allocate a stable ID first so the iCloud path is deterministic
+        let stableID = UUID()
+        let iCloudPath: String? = sync.projectsRoot?
+            .appendingPathComponent(stableID.uuidString).path
 
         let project = EonProject(
+            id: stableID,
             name: name,
             rootPath: path.path,
             iCloudPath: iCloudPath,
