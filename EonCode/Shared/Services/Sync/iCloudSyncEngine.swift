@@ -42,6 +42,14 @@ final class iCloudSyncEngine: ObservableObject {
         eonCodeRoot?.appendingPathComponent(Constants.iCloud.deviceStatusFolder)
     }
 
+    var plansRoot: URL? {
+        eonCodeRoot?.appendingPathComponent(Constants.iCloud.plansFolder)
+    }
+
+    var agentsRoot: URL? {
+        eonCodeRoot?.appendingPathComponent(Constants.iCloud.agentsFolder)
+    }
+
     private init() {
         checkAvailability()
         Task { await setupDirectories() }
@@ -64,7 +72,9 @@ final class iCloudSyncEngine: ObservableObject {
             root.appendingPathComponent(Constants.iCloud.versionsFolder),
             root.appendingPathComponent(Constants.iCloud.conversationsFolder),
             root.appendingPathComponent(Constants.iCloud.deviceStatusFolder),
-            root.appendingPathComponent(Constants.iCloud.checkpointsFolder)
+            root.appendingPathComponent(Constants.iCloud.checkpointsFolder),
+            root.appendingPathComponent(Constants.iCloud.plansFolder),
+            root.appendingPathComponent(Constants.iCloud.agentsFolder)
         ]
 
         for dir in dirs {

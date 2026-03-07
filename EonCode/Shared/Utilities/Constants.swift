@@ -17,6 +17,8 @@ enum Constants {
         static let conversationsFolder = "Conversations"
         static let deviceStatusFolder = "DeviceStatus"
         static let checkpointsFolder = "Checkpoints"
+        static let plansFolder = "Plans"
+        static let agentsFolder = "Agents"
         static let defaultProjectsFolder = "Navi/Projects"
     }
 

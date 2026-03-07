@@ -94,9 +94,9 @@ final class iCloudMemoryStore {
 
 extension iCloudSyncEngine {
     var containerURL: URL? {
-        // Use the existing iCloud container root
+        // Use the same container as the rest of the engine
         FileManager.default.url(
-            forUbiquityContainerIdentifier: nil
-        )?.appendingPathComponent("Documents/Navi", isDirectory: true)
+            forUbiquityContainerIdentifier: Constants.iCloud.containerID
+        )?.appendingPathComponent("Documents/\(Constants.iCloud.rootFolder)", isDirectory: true)
     }
 }

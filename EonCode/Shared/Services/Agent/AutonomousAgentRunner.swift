@@ -18,10 +18,37 @@ final class AutonomousAgentRunner: ObservableObject {
     private let store = AgentDefinitionStore.shared
 
     private init() {
+        // Quick local load first (legacy UserDefaults) so UI isn't empty
         agents = store.load()
-        // Resume any agents that were running when app closed
-        for agent in agents where agent.status == .running {
-            startRunLoop(agentID: agent.id)
+        // Then load authoritative data from iCloud
+        Task {
+            let iCloudAgents = await store.loadFromiCloud()
+            if !iCloudAgents.isEmpty {
+                agents = iCloudAgents
+            }
+            // Resume any agents that were running when app closed
+            for agent in agents where agent.status == .running {
+                startRunLoop(agentID: agent.id)
+            }
+        }
+        // Reload when iCloud syncs new changes from another device
+        NotificationCenter.default.addObserver(
+            forName: .iCloudDidSync, object: nil, queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                let updated = await self.store.loadFromiCloud()
+                // Merge: keep running agents' in-memory state, update idle/completed ones
+                for agent in updated {
+                    if let idx = self.agents.firstIndex(where: { $0.id == agent.id }) {
+                        if !self.agents[idx].status.isActive {
+                            self.agents[idx] = agent
+                        }
+                    } else {
+                        self.agents.append(agent)
+                    }
+                }
+            }
         }
     }
 
@@ -378,22 +405,76 @@ final class AutonomousAgentRunner: ObservableObject {
     }
 }
 
-// MARK: - Persistence
+// MARK: - Persistence (iCloud Drive, one JSON file per agent)
 
+@MainActor
 final class AgentDefinitionStore {
     static let shared = AgentDefinitionStore()
-    private let key = "navi_autonomous_agents_v1"
+    private let engine = iCloudSyncEngine.shared
+    private let legacyKey = "navi_autonomous_agents_v1"
 
+    // Synchronous save — fire-and-forget async write to iCloud
     func save(_ agents: [AgentDefinition]) {
-        if let data = try? JSONEncoder().encode(agents) {
-            UserDefaults.standard.set(data, forKey: key)
+        Task { await saveAsync(agents) }
+    }
+
+    private func saveAsync(_ agents: [AgentDefinition]) async {
+        guard let root = engine.agentsRoot else {
+            // iCloud unavailable — fall back to UserDefaults
+            if let data = try? JSONEncoder().encode(agents) {
+                UserDefaults.standard.set(data, forKey: legacyKey)
+            }
+            return
+        }
+        try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        for agent in agents {
+            let url = root.appendingPathComponent("\(agent.id.uuidString).json")
+            try? await engine.write(agent, to: url)
+        }
+        // Remove files for deleted agents
+        let existingIDs = Set(agents.map { $0.id.uuidString })
+        if let files = try? FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil) {
+            for file in files where file.pathExtension == "json" {
+                let name = file.deletingPathExtension().lastPathComponent
+                if !existingIDs.contains(name) {
+                    try? FileManager.default.removeItem(at: file)
+                }
+            }
         }
     }
 
     func load() -> [AgentDefinition] {
-        guard let data = UserDefaults.standard.data(forKey: key),
+        // Synchronous load from UserDefaults (legacy) used only at init before iCloud is ready
+        guard let data = UserDefaults.standard.data(forKey: legacyKey),
               let agents = try? JSONDecoder().decode([AgentDefinition].self, from: data)
         else { return [] }
         return agents
+    }
+
+    /// Async load from iCloud — call after init to get the authoritative data
+    func loadFromiCloud() async -> [AgentDefinition] {
+        guard let root = engine.agentsRoot else {
+            return load() // fallback
+        }
+        try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+
+        var loaded: [AgentDefinition] = []
+        if let files = try? FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil) {
+            for file in files where file.pathExtension == "json" {
+                if let agent = try? await engine.read(AgentDefinition.self, from: file) {
+                    loaded.append(agent)
+                }
+            }
+        }
+
+        // One-time migration from UserDefaults
+        let legacy = load()
+        if loaded.isEmpty, !legacy.isEmpty {
+            loaded = legacy
+            await saveAsync(loaded)
+            UserDefaults.standard.removeObject(forKey: legacyKey)
+        }
+
+        return loaded.sorted { ($0.lastActiveAt ?? $0.createdAt) > ($1.lastActiveAt ?? $1.createdAt) }
     }
 }

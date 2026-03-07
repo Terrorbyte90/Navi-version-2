@@ -96,10 +96,18 @@ final class PlanManager: ObservableObject {
     @Published var streamingText = ""
 
     private let api = ClaudeAPIClient.shared
-    private let storageKey = "navi.plans"
+    private let engine = iCloudSyncEngine.shared
+    // Legacy UserDefaults key — used for one-time migration only
+    private let legacyKey = "navi.plans"
 
     private init() {
-        load()
+        Task { await loadFromiCloud() }
+        // Listen for remote iCloud changes
+        NotificationCenter.default.addObserver(
+            forName: .iCloudDidSync, object: nil, queue: .main
+        ) { [weak self] _ in
+            Task { await self?.loadFromiCloud() }
+        }
     }
 
     // MARK: - New plan
@@ -317,18 +325,72 @@ final class PlanManager: ObservableObject {
         """
     }
 
-    // MARK: - Persistence (UserDefaults — plans are small enough)
+    // MARK: - Persistence (iCloud Drive)
 
-    private func persist() {
-        guard let data = try? JSONEncoder().encode(plans) else { return }
-        UserDefaults.standard.set(data, forKey: storageKey)
+    /// Saves all plans to iCloud, one JSON file per plan.
+    func persist() {
+        Task { await saveToiCloud() }
     }
 
-    private func load() {
-        guard let data = UserDefaults.standard.data(forKey: storageKey),
-              let decoded = try? JSONDecoder().decode([ProjectPlan].self, from: data)
-        else { return }
-        plans = decoded
+    private func saveToiCloud() async {
+        guard let root = engine.plansRoot else {
+            // iCloud unavailable — fall back to UserDefaults
+            if let data = try? JSONEncoder().encode(plans) {
+                UserDefaults.standard.set(data, forKey: legacyKey)
+            }
+            return
+        }
+        for plan in plans {
+            let url = root.appendingPathComponent("\(plan.id.uuidString).json")
+            try? await engine.write(plan, to: url)
+        }
+        // Remove files for deleted plans
+        let existingIDs = Set(plans.map { $0.id.uuidString })
+        if let files = try? FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil) {
+            for file in files where file.pathExtension == "json" {
+                let name = file.deletingPathExtension().lastPathComponent
+                if !existingIDs.contains(name) {
+                    try? FileManager.default.removeItem(at: file)
+                }
+            }
+        }
+    }
+
+    private func loadFromiCloud() async {
+        guard let root = engine.plansRoot else {
+            // iCloud unavailable — load from UserDefaults (legacy)
+            if let data = UserDefaults.standard.data(forKey: legacyKey),
+               let decoded = try? JSONDecoder().decode([ProjectPlan].self, from: data) {
+                plans = decoded.sorted { $0.updatedAt > $1.updatedAt }
+                activePlan = plans.first(where: { $0.status == .active }) ?? plans.first
+            }
+            return
+        }
+
+        // Ensure directory exists
+        try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+
+        var loaded: [ProjectPlan] = []
+        if let files = try? FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil) {
+            for file in files where file.pathExtension == "json" {
+                if let plan = try? await engine.read(ProjectPlan.self, from: file) {
+                    loaded.append(plan)
+                }
+            }
+        }
+
+        // One-time migration from UserDefaults
+        if loaded.isEmpty,
+           let data = UserDefaults.standard.data(forKey: legacyKey),
+           let legacy = try? JSONDecoder().decode([ProjectPlan].self, from: data) {
+            loaded = legacy
+            // Persist migrated plans to iCloud
+            plans = loaded
+            await saveToiCloud()
+            UserDefaults.standard.removeObject(forKey: legacyKey)
+        }
+
+        plans = loaded.sorted { $0.updatedAt > $1.updatedAt }
         activePlan = plans.first(where: { $0.status == .active }) ?? plans.first
     }
 }
