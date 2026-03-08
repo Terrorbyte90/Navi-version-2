@@ -107,7 +107,7 @@ struct BrowserAddressBar: View {
                     .foregroundColor(isHTTPS ? .green.opacity(0.85) : .secondary.opacity(0.45))
 
                 if isEditing {
-                    TextField("Search or enter address", text: $urlText)
+                    TextField("Sök eller ange adress", text: $urlText)
                         .textFieldStyle(.plain)
                         .font(.system(size: 14))
                         .focused($urlFocused)
@@ -119,7 +119,7 @@ struct BrowserAddressBar: View {
                         .foregroundColor(.primary)
                 } else {
                     Text(displayURL.isEmpty
-                         ? "Search or enter address"
+                         ? "Sök eller ange adress"
                          : (displayHost.isEmpty ? displayURL : displayHost))
                         .font(.system(size: 14))
                         .foregroundColor(displayURL.isEmpty ? .secondary.opacity(0.4) : .primary.opacity(0.85))
@@ -284,12 +284,24 @@ struct BrowserAgentPanel: View {
                     }
                 }
 
-                // Thought / status text
-                Text(agent.currentThought.isEmpty ? statusText : agent.currentThought)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(.primary.opacity(0.75))
-                    .lineLimit(1)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                // Thought / status text + sub-goals
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(agent.currentThought.isEmpty ? statusText : agent.currentThought)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(.primary.opacity(0.75))
+                        .lineLimit(1)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                    if !agent.subGoals.isEmpty {
+                        HStack(spacing: 6) {
+                            ForEach(agent.subGoals) { sg in
+                                subGoalPill(sg)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
 
                 // Session cost badge
                 if agent.sessionCost.apiCalls > 0 {
@@ -404,12 +416,12 @@ struct BrowserAgentPanel: View {
         VStack(spacing: 0) {
             // Header
             HStack(spacing: 8) {
-                Text("Agent log")
+                Text("Agentlogg")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(.secondary)
                 Spacer()
                 if !agent.log.isEmpty {
-                    Text("\(agent.log.count) steps")
+                    Text("\(agent.log.count) steg")
                         .font(.system(size: 11, design: .monospaced))
                         .foregroundColor(.secondary.opacity(0.5))
                 }
@@ -426,7 +438,7 @@ struct BrowserAgentPanel: View {
                 HStack {
                     Image(systemName: "cpu.fill")
                         .foregroundColor(.secondary.opacity(0.25))
-                    Text("No activity yet")
+                    Text("Ingen aktivitet ännu")
                         .font(.system(size: 12))
                         .foregroundColor(.secondary.opacity(0.35))
                 }
@@ -458,6 +470,41 @@ struct BrowserAgentPanel: View {
         .overlay(alignment: .top) {
             Rectangle().fill(Color.primary.opacity(0.06)).frame(height: 0.5)
         }
+    }
+
+    // MARK: - Sub-goal pill
+
+    private func subGoalPill(_ sg: BrowserSubGoal) -> some View {
+        let color: Color = {
+            switch sg.status {
+            case .active:    return .accentNavi
+            case .completed: return .green
+            case .failed:    return .red
+            case .pending:   return .secondary
+            }
+        }()
+        let icon: String = {
+            switch sg.status {
+            case .active:    return "arrow.triangle.branch"
+            case .completed: return "checkmark"
+            case .failed:    return "xmark"
+            case .pending:   return "circle"
+            }
+        }()
+
+        return HStack(spacing: 4) {
+            Image(systemName: icon)
+                .font(.system(size: 9, weight: .bold))
+                .foregroundColor(color)
+            Text(sg.description)
+                .font(.system(size: 10, weight: sg.status == .active ? .semibold : .regular))
+                .foregroundColor(color.opacity(0.9))
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 7)
+        .padding(.vertical, 3)
+        .background(color.opacity(0.1), in: Capsule())
+        .overlay(Capsule().strokeBorder(color.opacity(0.2), lineWidth: 0.5))
     }
 
     // MARK: - Helpers
@@ -497,22 +544,22 @@ struct BrowserAgentPanel: View {
 
     private var statusText: String {
         switch agent.status {
-        case .planning:              return "Planning…"
-        case .working(let s, let t): return "Step \(s) of \(t)"
-        case .waitingForUser:        return "Waiting for your input"
-        case .complete:              return "Done!"
-        case .failed:                return "Failed"
+        case .planning:              return "Planerar…"
+        case .working(let s, let t): return "Steg \(s) av \(t)"
+        case .waitingForUser:        return "Väntar på din input"
+        case .complete:              return "Klar!"
+        case .failed:                return "Misslyckades"
         case .idle:                  return ""
         }
     }
 
     private var placeholder: String {
         switch agent.status {
-        case .waitingForUser: return agent.userQuestion.isEmpty ? "Type your answer…" : agent.userQuestion
-        case .working, .planning: return "Agent is working…"
-        case .complete:       return "Give a new goal…"
-        case .failed:         return "Try again with a different goal…"
-        case .idle:           return "Give Navi a goal to perform…"
+        case .waitingForUser: return agent.userQuestion.isEmpty ? "Skriv ditt svar…" : agent.userQuestion
+        case .working, .planning: return "Agenten arbetar…"
+        case .complete:       return "Ge ett nytt mål…"
+        case .failed:         return "Försök igen med ett annat mål…"
+        case .idle:           return "Ge Navi ett mål att utföra…"
         }
     }
 }

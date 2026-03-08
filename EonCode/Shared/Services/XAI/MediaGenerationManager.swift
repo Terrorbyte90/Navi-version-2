@@ -25,7 +25,7 @@ final class MediaGenerationManager: ObservableObject {
         Task { await loadHistory() }
     }
 
-    // MARK: - Active generations
+    // MARK: - Derived lists
 
     var activeGenerations: [MediaGeneration] {
         generations.filter { $0.status.isActive }
@@ -37,6 +37,35 @@ final class MediaGenerationManager: ObservableObject {
 
     var canGenerate: Bool {
         activeGenerations.count < maxConcurrent
+    }
+
+    /// Completed generations grouped by "MMMM yyyy" (newest first).
+    var groupedCompletedGenerations: [(String, [MediaGeneration])] {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMMM yyyy"
+        formatter.locale = Locale(identifier: "sv_SE")
+
+        let sorted = completedGenerations.sorted { $0.createdAt > $1.createdAt }
+        var result: [(String, [MediaGeneration])] = []
+        var currentLabel = ""
+        var currentGroup: [MediaGeneration] = []
+
+        for gen in sorted {
+            let label = formatter.string(from: gen.createdAt)
+            if label == currentLabel {
+                currentGroup.append(gen)
+            } else {
+                if !currentGroup.isEmpty {
+                    result.append((currentLabel, currentGroup))
+                }
+                currentLabel = label
+                currentGroup = [gen]
+            }
+        }
+        if !currentGroup.isEmpty {
+            result.append((currentLabel, currentGroup))
+        }
+        return result
     }
 
     // MARK: - Generate Image
@@ -70,20 +99,23 @@ final class MediaGenerationManager: ObservableObject {
                 n: variations
             )
 
+            let folder = dateFolder(for: .image)
+
             for (i, result) in results.enumerated() {
                 let imageData = try await client.downloadImageData(from: result.url)
                 let filename = "\(gen.id.uuidString)\(i > 0 ? "-\(i)" : "").png"
+                let relativePath = "\(folder)/\(filename)"
 
-                try await saveToICloud(data: imageData, folder: Constants.iCloud.mediaImagesFolder, filename: filename)
+                try await saveToICloud(data: imageData, relativePath: relativePath)
+                gen.resultFilenames.append(relativePath)
 
                 if i == 0 {
-                    gen.resultFilename = filename
                     gen.thumbnailData = createThumbnail(from: imageData)
                 }
             }
 
             let pricePerImage = model.contains("pro") ? 0.07 : 0.02
-            let costUSD = Double(variations) * pricePerImage
+            let costUSD = Double(results.count) * pricePerImage
             gen.costUSD = costUSD
             gen.costSEK = costUSD * ExchangeRateService.shared.usdToSEK
             gen.status = .completed
@@ -104,7 +136,6 @@ final class MediaGenerationManager: ObservableObject {
     func refreshBalance() async {
         isLoadingBalance = true
         defer { isLoadingBalance = false }
-
         do {
             balance = try await client.fetchBalance()
         } catch {
@@ -112,34 +143,46 @@ final class MediaGenerationManager: ObservableObject {
         }
     }
 
-    // MARK: - Delete
+    // MARK: - Delete (removes all variation files)
 
     func delete(_ generation: MediaGeneration) async {
         generations.removeAll { $0.id == generation.id }
 
-        // Delete file from iCloud
-        if let filename = generation.resultFilename,
-           let root = icloud.naviRoot {
-            let filePath = root
-                .appendingPathComponent(generation.iCloudSubfolder)
-                .appendingPathComponent(filename)
-            try? FileManager.default.removeItem(at: filePath)
+        if let root = icloud.naviRoot {
+            for relativePath in generation.resultFilenames {
+                let fileURL = root.appendingPathComponent(relativePath)
+                try? FileManager.default.removeItem(at: fileURL)
+            }
         }
 
         await saveHistory()
     }
 
-    // MARK: - Persistence
+    // MARK: - URL helpers
+
+    /// All iCloud file URLs for a generation's variations.
+    func imageURLs(for generation: MediaGeneration) -> [URL] {
+        guard let root = icloud.naviRoot else { return [] }
+        return generation.resultFilenames.compactMap { path in
+            let url = root.appendingPathComponent(path)
+            return FileManager.default.fileExists(atPath: url.path) ? url : nil
+        }
+    }
+
+    /// First variation URL (backward compat).
+    func imageURL(for generation: MediaGeneration) -> URL? {
+        imageURLs(for: generation).first
+    }
+
+    // MARK: - Persistence (iCloud Drive)
 
     func loadHistory() async {
         guard let root = icloud.mediaRoot else { return }
         let historyURL = root.appendingPathComponent(historyFilename)
-
         do {
             let history: MediaHistory = try await icloud.read(MediaHistory.self, from: historyURL)
             generations = history.generations.sorted { $0.createdAt > $1.createdAt }
         } catch {
-            // First launch or no history
             generations = []
         }
     }
@@ -151,24 +194,27 @@ final class MediaGenerationManager: ObservableObject {
         try? await icloud.write(history, to: historyURL)
     }
 
-    // MARK: - File helpers
+    // MARK: - Private helpers
 
-    private func saveToICloud(data: Data, folder: String, filename: String) async throws {
-        guard let root = icloud.naviRoot else {
-            throw XAIError.invalidResponse
+    /// Returns the date-organized relative folder path, e.g. "Media/Images/2024-03".
+    private func dateFolder(for type: MediaType) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM"
+        let month = formatter.string(from: Date())
+        switch type {
+        case .image: return "\(Constants.iCloud.mediaImagesFolder)/\(month)"
+        case .video: return "\(Constants.iCloud.mediaVideosFolder)/\(month)"
         }
-        let folderURL = root.appendingPathComponent(folder)
-        try? FileManager.default.createDirectory(at: folderURL, withIntermediateDirectories: true)
-        let fileURL = folderURL.appendingPathComponent(filename)
-        try await icloud.writeData(data, to: fileURL)
     }
 
-    func imageURL(for generation: MediaGeneration) -> URL? {
-        guard let filename = generation.resultFilename,
-              let root = icloud.naviRoot else { return nil }
-        return root
-            .appendingPathComponent(generation.iCloudSubfolder)
-            .appendingPathComponent(filename)
+    private func saveToICloud(data: Data, relativePath: String) async throws {
+        guard let root = icloud.naviRoot else { throw XAIError.invalidResponse }
+        let fileURL = root.appendingPathComponent(relativePath)
+        try? FileManager.default.createDirectory(
+            at: fileURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try await icloud.writeData(data, to: fileURL)
     }
 
     private func createThumbnail(from imageData: Data) -> Data? {
@@ -202,4 +248,3 @@ final class MediaGenerationManager: ObservableObject {
         Task { await saveHistory() }
     }
 }
-
