@@ -1176,6 +1176,9 @@ struct InputBar: View {
             .padding(.bottom, 8)
         }
         .background(Color.chatBackground)
+        .sheet(isPresented: $showImagePicker) {
+            ImagePicker(selectedImages: $selectedImages)
+        }
     }
 }
 

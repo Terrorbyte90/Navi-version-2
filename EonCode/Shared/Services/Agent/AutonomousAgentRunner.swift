@@ -560,22 +560,46 @@ final class AutonomousAgentRunner: ObservableObject {
 
     #if os(macOS)
     private func runShellCommand(_ cmd: String) async -> String {
-        await withCheckedContinuation { cont in
+        let timeout: TimeInterval = 120
+        return await withCheckedContinuation { cont in
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/bin/zsh")
+            process.arguments = ["-c", cmd]
+            let pipe = Pipe()
+            process.standardOutput = pipe
+            process.standardError = pipe
+
+            // Terminate the process automatically if it exceeds the timeout
+            let timer = DispatchSource.makeTimerSource(queue: .global(qos: .utility))
+            timer.schedule(deadline: .now() + timeout)
+            var resumed = false
+            timer.setEventHandler {
+                if !resumed {
+                    resumed = true
+                    process.terminate()
+                    cont.resume(returning: "Timeout: kommandot tog längre än \(Int(timeout))s och avbröts.")
+                }
+                timer.cancel()
+            }
+
             DispatchQueue.global(qos: .utility).async {
-                let process = Process()
-                process.executableURL = URL(fileURLWithPath: "/bin/zsh")
-                process.arguments = ["-c", cmd]
-                let pipe = Pipe()
-                process.standardOutput = pipe
-                process.standardError = pipe
                 do {
                     try process.run()
+                    timer.resume()
                     process.waitUntilExit()
-                    let data = pipe.fileHandleForReading.readDataToEndOfFile()
-                    let output = String(data: data, encoding: .utf8) ?? ""
-                    cont.resume(returning: output.isEmpty ? "(inget utdata)" : String(output.prefix(2000)))
+                    timer.cancel()
+                    if !resumed {
+                        resumed = true
+                        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                        let output = String(data: data, encoding: .utf8) ?? ""
+                        cont.resume(returning: output.isEmpty ? "(inget utdata)" : String(output.prefix(2000)))
+                    }
                 } catch {
-                    cont.resume(returning: "Fel: \(error.localizedDescription)")
+                    timer.cancel()
+                    if !resumed {
+                        resumed = true
+                        cont.resume(returning: "Fel: \(error.localizedDescription)")
+                    }
                 }
             }
         }

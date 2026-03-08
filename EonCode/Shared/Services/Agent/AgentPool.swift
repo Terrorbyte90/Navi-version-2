@@ -24,6 +24,12 @@ final class AgentPool: ObservableObject {
         }
     }
 
+    /// Remove the agent for a deleted project, releasing its resources.
+    func removeAgent(for projectID: UUID) {
+        agents[projectID]?.stop()
+        agents.removeValue(forKey: projectID)
+    }
+
     var activeCount: Int {
         agents.values.filter { $0.isRunning }.count
     }

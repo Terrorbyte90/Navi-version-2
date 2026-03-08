@@ -83,7 +83,10 @@ final class ElevenLabsClient: ObservableObject {
     }
 
     private func fetchAudio(text: String, apiKey: String, voiceID: String) async throws -> Data {
-        let url = URL(string: "\(Constants.API.elevenLabsBaseURL)/text-to-speech/\(voiceID)")!
+        let encoded = voiceID.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? voiceID
+        guard let url = URL(string: "\(Constants.API.elevenLabsBaseURL)/text-to-speech/\(encoded)") else {
+            throw ElevenLabsError.requestFailed
+        }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue(apiKey, forHTTPHeaderField: "xi-api-key")

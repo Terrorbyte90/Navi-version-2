@@ -110,29 +110,45 @@ struct MarkdownPreview: View {
     }
 
     private func parseInline(_ text: String) -> AttributedString {
-        var result = AttributedString(text)
-
-        // Bold **text**
-        if let regex = try? NSRegularExpression(pattern: "\\*\\*(.+?)\\*\\*") {
-            let matches = regex.matches(in: text, range: NSRange(text.startIndex..., in: text))
-            for match in matches.reversed() {
-                if let range = Range(match.range(at: 1), in: text),
-                   let attrRange = Range(range, in: result) {
-                    result[attrRange].font = .system(size: 14).bold()
-                }
-            }
+        // Build result incrementally so marker characters (**,`) are stripped
+        // and styling is applied only to the inner content.
+        guard let regex = try? NSRegularExpression(pattern: "\\*\\*(.+?)\\*\\*|`(.+?)`") else {
+            return AttributedString(text)
         }
 
-        // Inline code `code`
-        if let regex = try? NSRegularExpression(pattern: "`(.+?)`") {
-            let matches = regex.matches(in: text, range: NSRange(text.startIndex..., in: text))
-            for match in matches.reversed() {
-                if let range = Range(match.range(at: 1), in: text),
-                   let attrRange = Range(range, in: result) {
-                    result[attrRange].font = .system(size: 13, design: .monospaced)
-                    result[attrRange].backgroundColor = .init(.codeBackground)
-                }
+        var result = AttributedString()
+        let matches = regex.matches(in: text, range: NSRange(text.startIndex..., in: text))
+        var lastEnd = text.startIndex
+
+        for match in matches {
+            guard let matchRange = Range(match.range, in: text) else { continue }
+
+            // Append unstyled text before this match
+            if lastEnd < matchRange.lowerBound {
+                result += AttributedString(String(text[lastEnd..<matchRange.lowerBound]))
             }
+
+            if match.range(at: 1).location != NSNotFound,
+               let inner = Range(match.range(at: 1), in: text) {
+                // Bold **text**
+                var styled = AttributedString(String(text[inner]))
+                styled.font = .system(size: 14).bold()
+                result += styled
+            } else if match.range(at: 2).location != NSNotFound,
+                      let inner = Range(match.range(at: 2), in: text) {
+                // Inline code `text`
+                var styled = AttributedString(String(text[inner]))
+                styled.font = .system(size: 13, design: .monospaced)
+                styled.backgroundColor = .init(.codeBackground)
+                result += styled
+            }
+
+            lastEnd = matchRange.upperBound
+        }
+
+        // Append remaining plain text
+        if lastEnd < text.endIndex {
+            result += AttributedString(String(text[lastEnd...]))
         }
 
         return result

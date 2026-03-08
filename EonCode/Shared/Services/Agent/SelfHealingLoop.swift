@@ -55,6 +55,11 @@ final class SelfHealingLoop {
             var conv = Conversation(projectID: projectID, model: .haiku)
             let fixTask = AgentTask(projectID: projectID, instruction: fixInstruction)
 
+            // Provide project context so the agent engine can resolve paths correctly
+            if let project = ProjectStore.shared.project(by: projectID) {
+                AgentEngine.shared.setProject(project)
+            }
+
             await AgentEngine.shared.run(
                 task: fixTask,
                 conversation: &conv,

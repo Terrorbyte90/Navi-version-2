@@ -65,6 +65,16 @@ final class PromptQueue: ObservableObject {
         return q
     }
 
+    /// Cancel all pending items and remove the queue for a deleted project.
+    static func removeQueue(for projectID: UUID) {
+        if let q = queues[projectID] {
+            q.processingTask?.cancel()
+            q.processingTask = nil
+            q.items.removeAll()
+        }
+        queues.removeValue(forKey: projectID)
+    }
+
     // MARK: - State
 
     let projectID: UUID
@@ -73,7 +83,7 @@ final class PromptQueue: ObservableObject {
     @Published var isProcessing = false
     @Published var currentItemID: UUID?
 
-    private var processingTask: Task<Void, Never>?
+    fileprivate var processingTask: Task<Void, Never>?
 
     private let sync = iCloudSyncEngine.shared
 
@@ -148,7 +158,6 @@ final class PromptQueue: ObservableObject {
             let agent = AgentPool.shared.agent(for: project)
 
             // Run iterations
-            var success = true
             for iteration in 1...item.iterationsTotal {
                 guard !Task.isCancelled else { break }
 
@@ -190,7 +199,7 @@ final class PromptQueue: ObservableObject {
             // Mark done
             if let currentIdx = items.firstIndex(where: { $0.id == item.id }) {
                 if items[currentIdx].status != .cancelled {
-                    items[currentIdx].status = success ? .completed : .failed
+                    items[currentIdx].status = .completed
                 }
             }
 

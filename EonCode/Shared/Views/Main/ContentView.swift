@@ -134,8 +134,8 @@ struct ContentView: View {
             NaviOrchestrator.shared.setActiveView(appSectionForTab(selectedTab))
             NaviOrchestrator.shared.setActiveProject(activeProject)
         }
-        .onChange(of: selectedTab) { updateViewContext() }
         .onChange(of: selectedTab) { _, newTab in
+            updateViewContext()
             NaviOrchestrator.shared.setActiveView(appSectionForTab(newTab))
         }
         .onChange(of: activeProject) { _, newProject in

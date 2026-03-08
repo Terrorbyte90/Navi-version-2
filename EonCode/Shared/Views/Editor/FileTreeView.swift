@@ -121,6 +121,8 @@ struct FileNodeRow: View {
             Button("Ta bort", role: .destructive) {
                 try? FileManager.default.removeItem(atPath: node.path)
                 if selectedNode?.id == node.id { selectedNode = nil }
+                // Immediately remove from parent so the UI updates without waiting for re-index
+                node.parent?.children?.removeAll { $0.id == node.id }
             }
         } message: {
             Text(node.isDirectory ? "Mappen och allt dess innehåll tas bort permanent." : "Filen tas bort permanent.")

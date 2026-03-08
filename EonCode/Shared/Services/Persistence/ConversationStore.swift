@@ -22,7 +22,8 @@ final class ConversationStore: ObservableObject {
         decoder.dateDecodingStrategy = .iso8601
 
         for file in files where file.pathExtension == "json" {
-            guard let data = try? Data(contentsOf: file),
+            // Use iCloud file coordinator so we never read a half-synced file
+            guard let data = try? await sync.readData(from: file),
                   let conversation = try? decoder.decode(Conversation.self, from: data),
                   conversation.projectID == projectID
             else { continue }

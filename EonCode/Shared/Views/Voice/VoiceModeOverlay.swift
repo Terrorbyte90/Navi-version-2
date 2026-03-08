@@ -24,7 +24,7 @@ struct VoiceModeOverlay: View {
         }
         .onAppear { vm.start() }
         .onDisappear { vm.stop() }
-        .onChange(of: vm.isActive) { active in
+        .onChange(of: vm.isActive) { _, active in
             if !active { isPresented = false }
         }
     }

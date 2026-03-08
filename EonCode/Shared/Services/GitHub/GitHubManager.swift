@@ -656,14 +656,16 @@ final class GitHubManager: ObservableObject {
 
     func runGit(_ args: [String]) async -> GitResult {
         #if os(macOS)
+        // Capture token on the main actor before dispatching to avoid data races
+        let capturedToken = self.token
         return await withCheckedContinuation { cont in
-            DispatchQueue.global(qos: .userInitiated).async { [self] in
+            DispatchQueue.global(qos: .userInitiated).async {
                 let proc = Process()
                 proc.executableURL = URL(fileURLWithPath: "/usr/bin/git")
 
                 // Rewrite clone URLs to embed token for HTTPS auth
                 var adjustedArgs = args
-                if let tok = self.token {
+                if let tok = capturedToken {
                     adjustedArgs = args.map { arg in
                         if arg.hasPrefix("https://github.com/") {
                             return arg.replacingOccurrences(
@@ -679,7 +681,7 @@ final class GitHubManager: ObservableObject {
                 // Environment for git
                 var env = ProcessInfo.processInfo.environment
                 env["GIT_TERMINAL_PROMPT"] = "0"
-                if let tok = self.token {
+                if let tok = capturedToken {
                     // Credential helper that provides token
                     env["GIT_ASKPASS"] = "/usr/bin/true"
                     env["GIT_USERNAME"] = "x-access-token"

@@ -113,6 +113,10 @@ final class ProjectStore: ObservableObject {
     func delete(_ project: NaviProject) async {
         projects.removeAll { $0.id == project.id }
 
+        // Release cached agent and prompt queue so memory is freed
+        AgentPool.shared.removeAgent(for: project.id)
+        PromptQueue.removeQueue(for: project.id)
+
         // Remove from iCloud
         if let dir = sync.urlForProject(project) {
             do {
