@@ -17,6 +17,7 @@ struct ChatHistorySidebar: View {
     @StateObject private var ghManager = GitHubManager.shared
     @StateObject private var agentPool = AgentPool.shared
     @StateObject private var mediaManager = MediaGenerationManager.shared
+    @StateObject private var voiceStudio = VoiceStudioManager.shared
 
     @State private var searchText = ""
     @State private var showSettings = false
@@ -175,6 +176,9 @@ struct ChatHistorySidebar: View {
                     badge: { let n = mediaManager.activeGenerations.count; return n > 0 ? "\(n)" : nil }()) {
                 selectedTab = .media; showSidebar = false
             }
+            navItem(icon: "waveform", label: "Röst", isActive: selectedTab == .voice) {
+                selectedTab = .voice; showSidebar = false
+            }
 
             Divider().opacity(0.08).padding(.vertical, 4)
 
@@ -211,6 +215,8 @@ struct ChatHistorySidebar: View {
             agentsHistory
         case .media:
             mediaHistory
+        case .voice:
+            voiceHistory
         }
     }
 
@@ -601,7 +607,7 @@ struct ChatHistorySidebar: View {
                             HStack(spacing: 10) {
                                 Image(systemName: gen.type.icon)
                                     .font(.system(size: 13))
-                                    .foregroundColor(.orange)
+                                    .foregroundColor(.accentNavi)
                                     .frame(width: 18)
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(gen.displayTitle)
@@ -610,7 +616,7 @@ struct ChatHistorySidebar: View {
                                         .lineLimit(1)
                                     Text(gen.status.displayName)
                                         .font(.system(size: 11))
-                                        .foregroundColor(.orange)
+                                        .foregroundColor(.accentNavi)
                                 }
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 ProgressView().scaleEffect(0.6)
@@ -652,6 +658,52 @@ struct ChatHistorySidebar: View {
                         }
                         .buttonStyle(.plain)
                     }
+                }
+            }
+        }
+    }
+
+    // MARK: - Voice history
+
+    @ViewBuilder
+    var voiceHistory: some View {
+        let filtered = voiceStudio.clips.filter {
+            searchText.isEmpty || $0.text.localizedCaseInsensitiveContains(searchText)
+        }
+        if filtered.isEmpty {
+            emptyHistoryHint(icon: "waveform", text: "Inga klipp ännu")
+        } else {
+            VStack(alignment: .leading, spacing: 0) {
+                sectionHeader("Klipp")
+                ForEach(filtered.prefix(20)) { clip in
+                    Button { selectedTab = .voice; showSidebar = false } label: {
+                        HStack(spacing: 10) {
+                            Image(systemName: clip.typeIcon)
+                                .font(.system(size: 13))
+                                .foregroundColor(voiceStudio.playingClipID == clip.id ? .accentNavi : .secondary)
+                                .frame(width: 18)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(clip.displayTitle)
+                                    .font(.system(size: 14))
+                                    .foregroundColor(.primary)
+                                    .lineLimit(1)
+                                HStack(spacing: 4) {
+                                    Text(clip.typeLabel)
+                                    if clip.clipType == .tts {
+                                        Text("·")
+                                        Text(clip.voiceName)
+                                    }
+                                    Text("·")
+                                    Text(clip.createdAt.relativeString)
+                                }
+                                .font(.system(size: 11))
+                                .foregroundColor(.secondary)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .padding(.horizontal, 16).padding(.vertical, 10)
+                    }
+                    .buttonStyle(.plain)
                 }
             }
         }

@@ -17,6 +17,7 @@ struct SidebarView: View {
     @StateObject private var statusBroadcaster = DeviceStatusBroadcaster.shared
     @StateObject private var ghManager = GitHubManager.shared
     @StateObject private var mediaManager = MediaGenerationManager.shared
+    @StateObject private var voiceStudio = VoiceStudioManager.shared
 
     @State private var searchText = ""
     @State private var showSettings = false
@@ -152,6 +153,7 @@ struct SidebarView: View {
         case .github:    return "Sök repos…"
         case .agents:    return "Sök agenter…"
         case .media:     return "Sök media…"
+        case .voice:     return "Sök klipp…"
         default:         return "Sök projekt…"
         }
     }
@@ -170,6 +172,7 @@ struct SidebarView: View {
             navItem(icon: "globe",                             label: "Webb",        target: .browser)
             navItem(icon: "photo.stack.fill",                  label: "Media",       target: .media,
                     badge: mediaBadge)
+            navItem(icon: "waveform",                          label: "Röst",        target: .voice)
             navItem(icon: "tray.2.fill",                       label: "Artefakter",  target: .artifacts,
                     badge: artifactStore.artifacts.isEmpty ? nil : "\(artifactStore.artifacts.count)")
         }
@@ -239,6 +242,7 @@ struct SidebarView: View {
         case .github:              githubRepoList
         case .agents:              agentSidebarList
         case .media:               mediaHistoryList
+        case .voice:               voiceClipList
         case .project, .browser:   projectList
         }
     }
@@ -594,7 +598,7 @@ struct SidebarView: View {
             HStack(spacing: 8) {
                 Image(systemName: gen.type == .image ? "photo" : "video")
                     .font(.system(size: 11))
-                    .foregroundColor(isActive ? .orange : .secondary.opacity(0.5))
+                    .foregroundColor(isActive ? .accentNavi : .secondary.opacity(0.5))
                     .frame(width: 14)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(gen.displayTitle)
@@ -604,7 +608,7 @@ struct SidebarView: View {
                     HStack(spacing: 4) {
                         if isActive {
                             Text(gen.status.displayName)
-                                .foregroundColor(.orange)
+                                .foregroundColor(.accentNavi)
                         } else {
                             Text(gen.createdAt.relativeString)
                         }
@@ -628,6 +632,58 @@ struct SidebarView: View {
         .padding(.horizontal, 6)
     }
 
+    // MARK: - Voice clip list
+
+    var voiceClipList: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 1) {
+                let filtered = voiceStudio.clips.filter {
+                    searchText.isEmpty || $0.text.localizedCaseInsensitiveContains(searchText)
+                }
+                if !filtered.isEmpty {
+                    listSectionHeader("Klipp")
+                    ForEach(filtered.prefix(30)) { clip in
+                        Button { section = .voice } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: clip.typeIcon)
+                                    .font(.system(size: 11))
+                                    .foregroundColor(voiceStudio.playingClipID == clip.id ? .accentNavi : .secondary.opacity(0.5))
+                                    .frame(width: 14)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(clip.displayTitle)
+                                        .font(.system(size: 13))
+                                        .foregroundColor(.primary)
+                                        .lineLimit(1)
+                                    HStack(spacing: 4) {
+                                        Text(clip.typeLabel)
+                                        if clip.clipType == .tts { Text("·"); Text(clip.voiceName) }
+                                        Text("·")
+                                        Text(clip.createdAt.relativeString)
+                                    }
+                                    .font(.system(size: 10))
+                                    .foregroundColor(.secondary.opacity(0.45))
+                                }
+                                Spacer()
+                                if voiceStudio.playingClipID == clip.id {
+                                    Image(systemName: "waveform")
+                                        .font(.system(size: 10))
+                                        .foregroundColor(.accentNavi)
+                                        .symbolEffect(.variableColor.iterative)
+                                }
+                            }
+                            .padding(.horizontal, 10).padding(.vertical, 6)
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.horizontal, 6)
+                    }
+                } else {
+                    emptyHint(icon: "waveform", text: searchText.isEmpty ? "Inga klipp" : "Inga träffar")
+                }
+            }
+            .padding(.bottom, 8)
+        }
+    }
+
     // MARK: - Bottom bar
 
     var bottomBar: some View {
@@ -635,7 +691,7 @@ struct SidebarView: View {
             // Active agent indicator (ChatGPT-style status strip)
             if agentPool.activeCount > 0 {
                 HStack(spacing: 7) {
-                    Circle().fill(Color.orange).frame(width: 7, height: 7)
+                    Circle().fill(Color.accentNavi).frame(width: 7, height: 7)
                     Text("Agent aktiv — \(agentPool.activeCount) jobb")
                         .font(.system(size: 11))
                         .foregroundColor(Color.secondary)

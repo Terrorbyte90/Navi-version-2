@@ -26,6 +26,10 @@
 		0F601222B672AEDFFFAF4491 /* AutonomousAgentRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A709BCBE6621AC584621D06 /* AutonomousAgentRunner.swift */; };
 		107B0EC26C371B6C5FE24AF5 /* BranchManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0C42F53C53517B25CB7979 /* BranchManager.swift */; };
 		12172C21C552F91BC79429C6 /* VoiceModeManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0BF9F678A4C3831B8207D5D /* VoiceModeManager.swift */; };
+		38911877D81E4A49B7FE60B1 /* VoiceStudioManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39FD3ED472134F889A68F84A /* VoiceStudioManager.swift */; };
+		52BCD698D9474CEAA88FD7B8 /* VoiceStudioManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39FD3ED472134F889A68F84A /* VoiceStudioManager.swift */; };
+		7B0E72D9428341AEB17B4710 /* VoiceStudioView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2D8A171F1044120866D69F9 /* VoiceStudioView.swift */; };
+		E0AC5DACBDCD4AA0877A6FC6 /* VoiceStudioView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2D8A171F1044120866D69F9 /* VoiceStudioView.swift */; };
 		135435DC340600BE2392322C /* AutonomousAgentRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A709BCBE6621AC584621D06 /* AutonomousAgentRunner.swift */; };
 		1478E02DFA9E00930AE55070 /* ChatManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FC918D8699DA242B1C26002 /* ChatManager.swift */; };
 		14E9A856D8E7538A42E40764 /* ToolExecutor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 855D00DD3329EAD130B86696 /* ToolExecutor.swift */; };
@@ -259,6 +263,7 @@
 		8BE7D1EDE2C854EDF626CFEF /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
 		8E17C3655574D856D8A2FA2B /* FileTreeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileTreeView.swift; sourceTree = "<group>"; };
 		8F8C9883B1DB4573FF5C9F73 /* VoiceModeOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceModeOverlay.swift; sourceTree = "<group>"; };
+		D2D8A171F1044120866D69F9 /* VoiceStudioView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceStudioView.swift; sourceTree = "<group>"; };
 		91594D83447F904E8FCC765A /* NaviOrchestrator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NaviOrchestrator.swift; sourceTree = "<group>"; };
 		92D7FE88018F0A2EC04931FF /* LocalAgentEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalAgentEngine.swift; sourceTree = "<group>"; };
 		948F5C36809C348A022F30BA /* AgentActivityView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentActivityView.swift; sourceTree = "<group>"; };
@@ -286,6 +291,7 @@
 		BF1E145A4DCF8B170F35B55C /* FileNode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileNode.swift; sourceTree = "<group>"; };
 		C09A7E41FD15D6E951893B64 /* AgentTask.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentTask.swift; sourceTree = "<group>"; };
 		C0BF9F678A4C3831B8207D5D /* VoiceModeManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceModeManager.swift; sourceTree = "<group>"; };
+		39FD3ED472134F889A68F84A /* VoiceStudioManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceStudioManager.swift; sourceTree = "<group>"; };
 		C49BB58E98745255FA2D8D44 /* Artifact.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Artifact.swift; sourceTree = "<group>"; };
 		CA5507FA5239C43E26C9AD52 /* WorkerAgent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkerAgent.swift; sourceTree = "<group>"; };
 		CA7B0E1D043971209D35C110 /* AgentAction+Platform.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AgentAction+Platform.swift"; sourceTree = "<group>"; };
@@ -489,6 +495,7 @@
 			isa = PBXGroup;
 			children = (
 				8F8C9883B1DB4573FF5C9F73 /* VoiceModeOverlay.swift */,
+				D2D8A171F1044120866D69F9 /* VoiceStudioView.swift */,
 			);
 			path = Voice;
 			sourceTree = "<group>";
@@ -714,6 +721,7 @@
 			children = (
 				AA0F21AB1B8D835B2DB15545 /* ElevenLabsClient.swift */,
 				C0BF9F678A4C3831B8207D5D /* VoiceModeManager.swift */,
+				39FD3ED472134F889A68F84A /* VoiceStudioManager.swift */,
 			);
 			path = Voice;
 			sourceTree = "<group>";
@@ -945,7 +953,9 @@
 				F9FC84F28E6E32579D622444 /* Version.swift in Sources */,
 				305478642D91B19AD1B6D208 /* VersionStore.swift in Sources */,
 				9E42BEE7328C4D3D9AE198B2 /* VoiceModeManager.swift in Sources */,
+				38911877D81E4A49B7FE60B1 /* VoiceStudioManager.swift in Sources */,
 				48AEE337BEEEC1649399FF30 /* VoiceModeOverlay.swift in Sources */,
+				7B0E72D9428341AEB17B4710 /* VoiceStudioView.swift in Sources */,
 				DC9D66C757886D5B0F2D9DAB /* WebViewContainer.swift in Sources */,
 				4958BCB3590E779F31D0BAC9 /* WorkerAgent.swift in Sources */,
 				F73E2CA8756A0825FADBE7D2 /* WorkerPool.swift in Sources */,
@@ -1049,7 +1059,9 @@
 				0268031574BC3759F0CCC5E4 /* Version.swift in Sources */,
 				CE0DA5088F4570AC95B033DC /* VersionStore.swift in Sources */,
 				12172C21C552F91BC79429C6 /* VoiceModeManager.swift in Sources */,
+				52BCD698D9474CEAA88FD7B8 /* VoiceStudioManager.swift in Sources */,
 				158FDEB191AA845C344E0BC8 /* VoiceModeOverlay.swift in Sources */,
+				E0AC5DACBDCD4AA0877A6FC6 /* VoiceStudioView.swift in Sources */,
 				03C63B4E79AFFDF18164CD94 /* WebViewContainer.swift in Sources */,
 				0C1D6E532B536498CBA52CB4 /* WorkerAgent.swift in Sources */,
 				DD38F4DB48551BBF6BA2CE22 /* WorkerPool.swift in Sources */,

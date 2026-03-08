@@ -1,6 +1,6 @@
 import SwiftUI
 
-enum AppSection: String, Hashable { case project, pureChat, browser, artifacts, planning, github, agents, media }
+enum AppSection: String, Hashable { case project, pureChat, browser, artifacts, planning, github, agents, media, voice }
 
 struct ContentView: View {
     @StateObject private var projectStore = ProjectStore.shared
@@ -77,6 +77,8 @@ struct ContentView: View {
             AgentView()
         case .media:
             MediaView()
+        case .voice:
+            VoiceStudioView()
         case .project:
             if let project = activeProject, let agent = activeAgent {
                 MacMainView(project: project, agent: agent)
@@ -179,6 +181,9 @@ struct ContentView: View {
         case .media:
             viewName = "Media"
             viewPurpose = "Generera bilder och video via xAI."
+        case .voice:
+            viewName = "Röst"
+            viewPurpose = "Text-till-tal och ljudeffekter via ElevenLabs."
         }
         MessageBuilder.currentViewContext = "\(viewName) — \(viewPurpose)"
     }
@@ -334,6 +339,16 @@ struct ContentView: View {
                     .font(.system(size: 15))
                     .foregroundColor(Color.secondary)
             }
+
+        case .voice:
+            HStack(spacing: 5) {
+                Text("Navi")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(Color.primary)
+                Text("Röst")
+                    .font(.system(size: 15))
+                    .foregroundColor(Color.secondary)
+            }
         }
     }
 
@@ -401,6 +416,8 @@ struct ContentView: View {
             AgentView()
         case .media:
             MediaView()
+        case .voice:
+            VoiceStudioView()
         }
     }
 
@@ -470,6 +487,7 @@ struct ContentView: View {
         case .github: return .github
         case .agents: return .agents
         case .media: return .media
+        case .voice: return .voice
         }
     }
 
@@ -492,7 +510,7 @@ struct ContentView: View {
 // MARK: - Tabs
 
 enum AppTab: Int, Hashable {
-    case chat, project, browser, artifacts, plan, github, agents, media
+    case chat, project, browser, artifacts, plan, github, agents, media, voice
 }
 
 // MARK: - macOS Main View

@@ -82,7 +82,65 @@ final class ElevenLabsClient: ObservableObject {
         }
     }
 
-    private func fetchAudio(text: String, apiKey: String, voiceID: String) async throws -> Data {
+    /// Parameterized TTS — used by VoiceStudioView
+    func generateTTS(
+        text: String,
+        voiceID: String,
+        stability: Double = 0.5,
+        similarityBoost: Double = 0.75,
+        style: Double = 0.0
+    ) async throws -> Data {
+        guard let key = apiKey, !key.isEmpty else { throw ElevenLabsError.noAPIKey }
+        return try await fetchAudio(
+            text: text, apiKey: key, voiceID: voiceID,
+            stability: stability, similarityBoost: similarityBoost, style: style
+        )
+    }
+
+    /// Sound effects / text-to-sound via ElevenLabs /sound-generation
+    func generateSoundEffect(text: String, duration: Double = 5.0, promptInfluence: Double = 0.3) async throws -> Data {
+        guard let key = apiKey, !key.isEmpty else { throw ElevenLabsError.noAPIKey }
+        guard let url = URL(string: "\(Constants.API.elevenLabsBaseURL)/sound-generation") else {
+            throw ElevenLabsError.requestFailed
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue(key, forHTTPHeaderField: "xi-api-key")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let body: [String: Any] = [
+            "text": text,
+            "duration_seconds": duration,
+            "prompt_influence": promptInfluence
+        ]
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+            throw ElevenLabsError.requestFailed
+        }
+        return data
+    }
+
+    /// Play audio data immediately (for studio preview)
+    func playData(_ data: Data) async {
+        isSpeaking = true
+        defer { isSpeaking = false }
+        #if os(iOS)
+        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [.defaultToSpeaker])
+        try? AVAudioSession.sharedInstance().setActive(true)
+        #endif
+        await player.play(data: data)
+    }
+
+    private func fetchAudio(
+        text: String,
+        apiKey: String,
+        voiceID: String,
+        stability: Double = 0.5,
+        similarityBoost: Double = 0.75,
+        style: Double = 0.0
+    ) async throws -> Data {
         let encoded = voiceID.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? voiceID
         guard let url = URL(string: "\(Constants.API.elevenLabsBaseURL)/text-to-speech/\(encoded)") else {
             throw ElevenLabsError.requestFailed
@@ -95,7 +153,11 @@ final class ElevenLabsClient: ObservableObject {
         let body: [String: Any] = [
             "text": text,
             "model_id": "eleven_multilingual_v3",
-            "voice_settings": ["stability": 0.5, "similarity_boost": 0.75]
+            "voice_settings": [
+                "stability": stability,
+                "similarity_boost": similarityBoost,
+                "style": style
+            ]
         ]
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
@@ -109,6 +171,7 @@ final class ElevenLabsClient: ObservableObject {
 
 enum ElevenLabsError: Error {
     case requestFailed
+    case noAPIKey
 }
 
 @MainActor
