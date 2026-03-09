@@ -1,4 +1,7 @@
 import SwiftUI
+#if os(iOS)
+import PhotosUI
+#endif
 
 // MARK: - Cost Badge (reusable across chat views)
 
@@ -133,7 +136,6 @@ struct PureChatView: View {
     @StateObject private var manager = ChatManager.shared
     @State private var inputText = ""
     @State private var selectedImages: [Data] = []
-    @State private var isShowingImagePicker = false
     @State private var isShowingFilePicker = false
     @State private var showVoiceMode = false
     @State private var scrollProxy: ScrollViewProxy?
@@ -194,9 +196,6 @@ struct PureChatView: View {
             }
         }
         .background(Color.chatBackground)
-        .sheet(isPresented: $isShowingImagePicker) {
-            ImagePicker(selectedImages: $selectedImages)
-        }
         #if os(iOS)
         .fullScreenCover(isPresented: $showVoiceMode) {
             VoiceModeOverlay(isPresented: $showVoiceMode)
@@ -336,7 +335,6 @@ struct PureChatView: View {
         PureChatInputBar(
             inputText: $inputText,
             selectedImages: $selectedImages,
-            isShowingImagePicker: $isShowingImagePicker,
             isShowingFilePicker: $isShowingFilePicker,
             showVoiceMode: $showVoiceMode,
             isStreaming: manager.isStreaming,
@@ -695,13 +693,16 @@ struct MarkdownCodeBlock: View {
 private struct PureChatInputBar: View {
     @Binding var inputText: String
     @Binding var selectedImages: [Data]
-    @Binding var isShowingImagePicker: Bool
     @Binding var isShowingFilePicker: Bool
     @Binding var showVoiceMode: Bool
     let isStreaming: Bool
     let onSend: () -> Void
 
     @FocusState private var inputFocused: Bool
+    #if os(iOS)
+    // PhotosPicker lives here — no .sheet() needed, no _UIReparentingView warnings
+    @State private var photoPickerItems: [PhotosPickerItem] = []
+    #endif
 
     var body: some View {
         VStack(spacing: 6) {
@@ -726,17 +727,27 @@ private struct PureChatInputBar: View {
             // ChatGPT-style pill
             HStack(alignment: .center, spacing: 8) {
                 Menu {
-                    Button { isShowingImagePicker = true } label: {
-                        Label("Bild", systemImage: "photo")
+                    #if os(iOS)
+                    // PhotosPicker as menu item — no sheet, no _UIReparentingView
+                    PhotosPicker(selection: $photoPickerItems, maxSelectionCount: 5, matching: .images) {
+                        Label("Bild / Kamera", systemImage: "photo")
                     }
+                    .onChange(of: photoPickerItems) { _, items in
+                        Task {
+                            for item in items {
+                                if let data = try? await item.loadTransferable(type: Data.self) {
+                                    await MainActor.run { selectedImages.append(data) }
+                                }
+                            }
+                            await MainActor.run { photoPickerItems = [] }
+                        }
+                    }
+                    #else
+                    Button { } label: { Label("Bild", systemImage: "photo") }
+                    #endif
                     Button { isShowingFilePicker = true } label: {
                         Label("Fil", systemImage: "doc")
                     }
-                    #if os(iOS)
-                    Button { isShowingImagePicker = true } label: {
-                        Label("Kamera", systemImage: "camera")
-                    }
-                    #endif
                 } label: {
                     ZStack {
                         Circle()

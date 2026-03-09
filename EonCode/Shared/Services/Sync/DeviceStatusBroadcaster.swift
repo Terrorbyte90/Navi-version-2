@@ -193,8 +193,10 @@ final class DeviceStatusBroadcaster: ObservableObject {
     private func detectConnectionMethod() async {
         #if os(iOS)
         let client = LocalNetworkClient.shared
-        if let saved = URL(string: SettingsStore.shared.macServerURL),
-           !SettingsStore.shared.macServerURL.isEmpty,
+        let savedURLString = SettingsStore.shared.macServerURL
+        // Don't ping if no URL configured — avoids nw_connection errors
+        if !savedURLString.isEmpty,
+           let saved = URL(string: savedURLString),
            await client.pingQuick(saved) {
             connectionMethod = .localHTTP
         } else if !PeerSyncEngine.shared.connections.isEmpty {

@@ -91,8 +91,9 @@ struct ContentView: View {
 
     #if os(iOS)
     @State private var showSidebar = false
-    // Reactive chat manager so model name updates live
-    @StateObject private var chatMgr = ChatManager.shared
+    // NOTE: chatMgr is NOT here — it was causing ContentView to re-render
+    // on every streaming token (every 60ms). It now lives in ChatNavTitle
+    // and ChatNewButton which are isolated child structs.
     @StateObject private var planMgr = PlanManager.shared
     @StateObject private var browserAgent = BrowserAgent.shared
 
@@ -220,40 +221,9 @@ struct ContentView: View {
     var iOSCenterTitle: some View {
         switch selectedTab {
         case .chat:
-            // "Navi  Haiku 4.5 ⌄" — exact ChatGPT layout
-            Menu {
-                ForEach(ClaudeModel.allCases) { model in
-                    Button {
-                        if let conv = chatMgr.activeConversation,
-                           let idx = chatMgr.conversations.firstIndex(where: { $0.id == conv.id }) {
-                            chatMgr.conversations[idx].model = model
-                            // Replace the whole value — mutating an optional copy has no effect
-                            chatMgr.activeConversation = chatMgr.conversations[idx]
-                        }
-                    } label: {
-                        HStack {
-                            Text(model.displayName)
-                            if model == chatMgr.activeConversation?.model {
-                                Image(systemName: "checkmark")
-                            }
-                        }
-                    }
-                }
-            } label: {
-                HStack(spacing: 5) {
-                    Text("Navi")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(Color.primary)
-                    Text(chatMgr.activeConversation?.model.displayName ?? "Claude")
-                        .font(.system(size: 15))
-                        .foregroundColor(Color.secondary)
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(Color.secondary.opacity(0.6))
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
+            // Isolated struct — subscribes to ChatManager independently so
+            // streaming updates don't re-render the whole ContentView.
+            ChatNavTitle()
 
         case .project:
             HStack(spacing: 5) {
@@ -344,7 +314,7 @@ struct ContentView: View {
     var iOSTrailingButton: some View {
         switch selectedTab {
         case .chat:
-            Button { _ = chatMgr.newConversation() } label: {
+            Button { _ = ChatManager.shared.newConversation() } label: {
                 Image(systemName: "square.and.pencil")
                     .font(.system(size: 17))
                     .foregroundColor(Color.secondary)
@@ -489,6 +459,51 @@ struct ContentView: View {
     }
     #endif
 }
+
+// MARK: - Isolated chat navigation title
+// Owns its own @StateObject so streaming (streamingText every 60ms)
+// only re-renders this tiny view, NOT all of ContentView.
+
+#if os(iOS)
+private struct ChatNavTitle: View {
+    @StateObject private var chatMgr = ChatManager.shared
+
+    var body: some View {
+        Menu {
+            ForEach(ClaudeModel.allCases) { model in
+                Button {
+                    if let conv = chatMgr.activeConversation,
+                       let idx = chatMgr.conversations.firstIndex(where: { $0.id == conv.id }) {
+                        chatMgr.conversations[idx].model = model
+                        chatMgr.activeConversation = chatMgr.conversations[idx]
+                    }
+                } label: {
+                    HStack {
+                        Text(model.displayName)
+                        if model == chatMgr.activeConversation?.model {
+                            Image(systemName: "checkmark")
+                        }
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 5) {
+                Text("Navi")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(Color.primary)
+                Text(chatMgr.activeConversation?.model.displayName ?? "Claude")
+                    .font(.system(size: 15))
+                    .foregroundColor(Color.secondary)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(Color.secondary.opacity(0.6))
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+#endif
 
 // MARK: - Tabs
 

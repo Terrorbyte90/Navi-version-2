@@ -413,6 +413,10 @@ final class LocalNetworkClient {
     }
 
     private func subnetScan() async -> URL? {
+        // Never scan subnet if user has never configured a Mac server URL.
+        // Scanning 254 IPs generates 254 nw_connection errors per cycle.
+        guard !SettingsStore.shared.macServerURL.isEmpty else { return nil }
+
         let base = localSubnetBase() ?? "192.168.1"
         let port = Constants.Sync.localHTTPPort
         let hosts = (1...254).map { "\(base).\($0)" }
