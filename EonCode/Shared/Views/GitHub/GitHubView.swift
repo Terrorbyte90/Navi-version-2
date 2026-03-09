@@ -647,7 +647,7 @@ struct RepoWorkView: View {
 
     var commitsTab: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 1) {
+            LazyVStack(alignment: .leading, spacing: 0) {
                 if isLoadingCommits {
                     ProgressView().frame(maxWidth: .infinity).padding(.top, 24)
                 } else if commits.isEmpty {
@@ -658,11 +658,56 @@ struct RepoWorkView: View {
                     }
                     .frame(maxWidth: .infinity).padding(.top, 32)
                 } else {
-                    ForEach(commits) { commit in CommitRow(commit: commit) }
+                    // Summary row
+                    HStack(spacing: 6) {
+                        Image(systemName: "arrow.triangle.branch").font(.system(size: 10))
+                        Text(currentRepo.currentBranch)
+                            .font(.system(size: 11, weight: .semibold))
+                        Text("·").foregroundColor(.secondary.opacity(0.3))
+                        Text("\(commits.count) commits")
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary)
+                    }
+                    .foregroundColor(.secondary.opacity(0.6))
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+
+                    Divider().opacity(0.08)
+
+                    // Grouped by date
+                    ForEach(groupedCommits, id: \.0) { (dayLabel, dayCommits) in
+                        CommitDayHeader(label: dayLabel)
+                        ForEach(dayCommits) { commit in CommitRow(commit: commit) }
+                    }
                 }
             }
             .padding(.bottom, 16)
         }
+    }
+
+    /// Commits grouped by calendar day
+    var groupedCommits: [(String, [GitHubCommit])] {
+        let cal = Calendar.current
+        let iso = ISO8601DateFormatter()
+        var groups: [(String, [GitHubCommit])] = []
+        var seen: [String: Int] = [:]  // label → index in groups
+        for commit in commits {
+            let date = iso.date(from: commit.commit.author.date) ?? Date.distantPast
+            let label: String
+            if cal.isDateInToday(date) { label = "Idag" }
+            else if cal.isDateInYesterday(date) { label = "Igår" }
+            else {
+                let f = DateFormatter(); f.dateFormat = "d MMM yyyy"; f.locale = Locale(identifier: "sv_SE")
+                label = f.string(from: date)
+            }
+            if let idx = seen[label] {
+                groups[idx].1.append(commit)
+            } else {
+                seen[label] = groups.count
+                groups.append((label, [commit]))
+            }
+        }
+        return groups
     }
 
     // MARK: - Pull Requests tab
@@ -876,36 +921,78 @@ struct BranchPickerRow: View {
     }
 }
 
+// MARK: - Commit day header
+
+struct CommitDayHeader: View {
+    let label: String
+    var body: some View {
+        Text(label)
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundColor(.secondary.opacity(0.55))
+            .padding(.horizontal, 16)
+            .padding(.top, 12)
+            .padding(.bottom, 4)
+    }
+}
+
 // MARK: - Commit row
 
 struct CommitRow: View {
     let commit: GitHubCommit
+    @State private var shaCopied = false
 
     var shortSHA: String { String(commit.sha.prefix(7)) }
     var message: String { commit.commit.message.components(separatedBy: "\n").first ?? commit.commit.message }
     var author: String { commit.commit.author.name }
-    var date: String {
+    var time: String {
         let formatter = ISO8601DateFormatter()
-        if let d = formatter.date(from: commit.commit.author.date) { return d.relativeString }
-        return commit.commit.author.date
+        if let d = formatter.date(from: commit.commit.author.date) {
+            let f = DateFormatter(); f.dateFormat = "HH:mm"; return f.string(from: d)
+        }
+        return ""
     }
 
     var body: some View {
         HStack(spacing: 10) {
-            Text(shortSHA)
-                .font(.system(size: 11, design: .monospaced)).foregroundColor(.accentNavi)
-                .frame(width: 52, alignment: .leading)
+            // Copyable SHA pill
+            Button {
+                #if os(iOS)
+                UIPasteboard.general.string = commit.sha
+                #else
+                NSPasteboard.general.setString(commit.sha, forType: .string)
+                #endif
+                shaCopied = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { shaCopied = false }
+            } label: {
+                Text(shaCopied ? "✓" : shortSHA)
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundColor(shaCopied ? .green : .accentNavi)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 3)
+                    .background(
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(shaCopied ? Color.green.opacity(0.1) : Color.accentNavi.opacity(0.1))
+                    )
+            }
+            .buttonStyle(.plain)
+            .frame(width: 52, alignment: .leading)
+            .animation(.easeInOut(duration: 0.15), value: shaCopied)
+
             VStack(alignment: .leading, spacing: 2) {
                 Text(message).font(.system(size: 13)).foregroundColor(.primary).lineLimit(1)
                 HStack(spacing: 6) {
-                    Text(author).font(.system(size: 10)).foregroundColor(.secondary.opacity(0.6))
-                    Text("·").foregroundColor(.secondary.opacity(0.3))
-                    Text(date).font(.system(size: 10)).foregroundColor(.secondary.opacity(0.5))
+                    Image(systemName: "person").font(.system(size: 9))
+                    Text(author).font(.system(size: 10)).foregroundColor(.secondary.opacity(0.6)).lineLimit(1)
+                    if !time.isEmpty {
+                        Text("·").foregroundColor(.secondary.opacity(0.3))
+                        Text(time).font(.system(size: 10, design: .monospaced)).foregroundColor(.secondary.opacity(0.45))
+                    }
                 }
             }
             Spacer()
         }
-        .padding(.horizontal, 16).padding(.vertical, 8)
+        .padding(.horizontal, 16).padding(.vertical, 7)
+        .contentShape(Rectangle())
     }
 }
 

@@ -8,7 +8,7 @@ struct AgentActivityView: View {
 
     @State private var showTodo = true
     @State private var showCode = false
-    @State private var showTimeline = false
+    @State private var showTimeline = true   // default visible — shows real-time step log
     @State private var pulseAnimation = false
 
     var body: some View {

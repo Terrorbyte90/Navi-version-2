@@ -551,7 +551,7 @@ enum AppTab: Int, Hashable {
 
 // MARK: - macOS Main View
 
-enum MacEditorTab: Int, Hashable { case editor, agents }
+enum MacEditorTab: Int, Hashable { case editor, agents, versions }
 
 #if os(macOS)
 struct MacMainView: View {
@@ -571,16 +571,19 @@ struct MacMainView: View {
 
             // ── Content ──────────────────────────────────────────────────────
             HSplitView {
-                // Left: file tree + editor / agent status
+                // Left: file tree + editor / agent status / versions
                 VStack(spacing: 0) {
-                    if macEditorTab == .editor {
+                    switch macEditorTab {
+                    case .editor:
                         HSplitView {
                             FileTreeView(project: project, selectedNode: $selectedNode)
                                 .frame(minWidth: 160, maxWidth: 260)
                             editorPane
                         }
-                    } else {
+                    case .agents:
                         AgentStatusView(agent: agent)
+                    case .versions:
+                        ProjectVersionsPanel(project: project)
                     }
                 }
                 .frame(minWidth: 380)
@@ -607,10 +610,11 @@ struct MacMainView: View {
 
             Spacer()
 
-            // Editor / Agent tabs
+            // Editor / Agent / Versions tabs
             HStack(spacing: 2) {
                 MacTabPill(title: "Filer", icon: "folder", tab: .editor, selected: $macEditorTab)
                 MacTabPill(title: "Agent", icon: "gearshape.2", tab: .agents, selected: $macEditorTab)
+                MacTabPill(title: "Versioner", icon: "clock.arrow.circlepath", tab: .versions, selected: $macEditorTab)
             }
             .padding(3)
             .background(Color.white.opacity(0.06))
@@ -941,6 +945,238 @@ struct NewProjectView: View {
 
         store.activeProject = project
         dismiss()
+    }
+}
+
+// MARK: - ProjectVersionsPanel
+// Simple read-only timeline of local version snapshots for the active project.
+
+struct ProjectVersionsPanel: View {
+    let project: NaviProject
+    @StateObject private var store = VersionStore.shared
+    @State private var selectedVersion: ProjectVersion?
+
+    private var versions: [ProjectVersion] {
+        store.versionsForProject(project.id).reversed()
+    }
+
+    var body: some View {
+        #if os(macOS)
+        HSplitView {
+            versionList.frame(minWidth: 220, maxWidth: 280)
+            versionDetail
+        }
+        .onAppear { Task { await store.loadVersions(for: project) } }
+        #else
+        NavigationStack {
+            versionList
+                .navigationTitle("Versioner")
+                .navigationBarTitleDisplayMode(.inline)
+                .navigationDestination(for: ProjectVersion.self) { v in
+                    VersionDetailPane(version: v, project: project)
+                }
+        }
+        .onAppear { Task { await store.loadVersions(for: project) } }
+        #endif
+    }
+
+    var versionList: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 8) {
+                Image(systemName: "clock.arrow.circlepath")
+                    .font(.system(size: 12)).foregroundColor(.secondary)
+                Text("Versionshistorik")
+                    .font(.system(size: 13, weight: .semibold))
+                Spacer()
+                Text("\(versions.count) snapshots")
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary.opacity(0.5))
+            }
+            .padding(.horizontal, 14).padding(.vertical, 10)
+
+            Divider().opacity(0.1)
+
+            if versions.isEmpty {
+                VStack(spacing: 10) {
+                    Image(systemName: "clock.badge.questionmark")
+                        .font(.system(size: 32)).foregroundColor(.secondary.opacity(0.2))
+                    Text("Inga versioner sparade")
+                        .font(.system(size: 13)).foregroundColor(.secondary.opacity(0.4))
+                    Text("Versioner skapas automatiskt av agenten.")
+                        .font(.system(size: 11)).foregroundColor(.secondary.opacity(0.3))
+                        .multilineTextAlignment(.center)
+                }
+                .padding(24)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 0) {
+                        ForEach(versions) { version in
+                            #if os(macOS)
+                            VersionRow(
+                                version: version,
+                                isSelected: selectedVersion?.id == version.id
+                            ) { selectedVersion = version }
+                            #else
+                            NavigationLink(value: version) {
+                                VersionRow(version: version, isSelected: false) {}
+                            }
+                            .buttonStyle(.plain)
+                            #endif
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    var versionDetail: some View {
+        if let v = selectedVersion {
+            VersionDetailPane(version: v, project: project)
+        } else {
+            VStack(spacing: 10) {
+                Image(systemName: "arrow.left")
+                    .font(.system(size: 28)).foregroundColor(.secondary.opacity(0.15))
+                Text("Välj en version")
+                    .font(.system(size: 13)).foregroundColor(.secondary.opacity(0.3))
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+}
+
+// MARK: - VersionRow
+
+struct VersionRow: View {
+    let version: ProjectVersion
+    let isSelected: Bool
+    let onTap: () -> Void
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: 10) {
+                // Auto vs manual indicator
+                Image(systemName: version.isAutoSnapshot ? "clock" : "bookmark.fill")
+                    .font(.system(size: 11))
+                    .foregroundColor(version.isAutoSnapshot ? .secondary.opacity(0.4) : .accentNavi)
+                    .frame(width: 16)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(version.displayName)
+                        .font(.system(size: 12, weight: isSelected ? .semibold : .regular))
+                        .foregroundColor(.primary)
+                        .lineLimit(1)
+
+                    HStack(spacing: 5) {
+                        if !version.filesChanged.isEmpty {
+                            Text("\(version.filesChanged.count) filer")
+                                .font(.system(size: 10))
+                                .foregroundColor(.secondary.opacity(0.5))
+                        }
+                        if !version.author.isEmpty {
+                            Text("·").foregroundColor(.secondary.opacity(0.2))
+                            Text(version.author)
+                                .font(.system(size: 10))
+                                .foregroundColor(.secondary.opacity(0.4))
+                                .lineLimit(1)
+                        }
+                    }
+                }
+
+                Spacer()
+            }
+            .padding(.horizontal, 12).padding(.vertical, 8)
+            .background(isSelected ? Color.accentNavi.opacity(0.1) : Color.clear)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+// MARK: - VersionDetailPane
+
+struct VersionDetailPane: View {
+    let version: ProjectVersion
+    let project: NaviProject
+    @StateObject private var store = VersionStore.shared
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                // Header
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 8) {
+                        Image(systemName: version.isAutoSnapshot ? "clock" : "bookmark.fill")
+                            .foregroundColor(version.isAutoSnapshot ? .secondary : .accentNavi)
+                        Text(version.displayName)
+                            .font(.system(size: 15, weight: .semibold))
+                        Spacer()
+                    }
+
+                    if !version.description.isEmpty {
+                        Text(version.description)
+                            .font(.system(size: 13))
+                            .foregroundColor(.secondary)
+                    }
+
+                    HStack(spacing: 12) {
+                        Label(version.createdAt.formatted(date: .abbreviated, time: .shortened),
+                              systemImage: "calendar")
+                        Label(version.branch, systemImage: "arrow.triangle.branch")
+                        if !version.author.isEmpty {
+                            Label(version.author, systemImage: "desktopcomputer")
+                        }
+                    }
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary.opacity(0.6))
+                }
+                .padding(14)
+                .background(Color.white.opacity(0.04))
+                .cornerRadius(10)
+
+                // Changed files
+                if !version.filesChanged.isEmpty {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Ändrade filer (\(version.filesChanged.count))")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(.secondary)
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            ForEach(version.filesChanged.sorted(), id: \.self) { file in
+                                HStack(spacing: 6) {
+                                    Image(systemName: fileIcon(file))
+                                        .font(.system(size: 10))
+                                        .foregroundColor(.secondary.opacity(0.5))
+                                    Text(file)
+                                        .font(.system(size: 11, design: .monospaced))
+                                        .foregroundColor(.primary.opacity(0.8))
+                                        .lineLimit(1)
+                                    Spacer()
+                                }
+                                .padding(.vertical, 3)
+                            }
+                        }
+                        .padding(10)
+                        .background(Color.codeBackground)
+                        .cornerRadius(8)
+                    }
+                }
+
+                Spacer()
+            }
+            .padding(14)
+        }
+    }
+
+    private func fileIcon(_ name: String) -> String {
+        switch (name as NSString).pathExtension.lowercased() {
+        case "swift": return "swift"
+        case "py": return "doc.text"
+        case "js", "ts": return "doc.text"
+        case "json": return "curlybraces"
+        case "md": return "doc.richtext"
+        default: return "doc"
+        }
     }
 }
 

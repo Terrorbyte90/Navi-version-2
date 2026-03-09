@@ -180,12 +180,16 @@ final class ChatManager: ObservableObject {
             costSEK = 0
         }
 
+        // Find which memories were referenced in this response (zero-cost keyword match)
+        let relevantMems = MemoryManager.shared.relevantMemories(for: fullText, max: 3)
+
         let assistantMsg = PureChatMessage(
             role: .assistant,
             content: ResponseCleaner.clean(fullText),
             costSEK: costSEK,
             model: conversation.model,
-            tokenUsage: finalUsage
+            tokenUsage: finalUsage,
+            memoriesInContext: relevantMems.map(\.fact)
         )
         conversation.messages.append(assistantMsg)
         conversation.updatedAt = Date()
@@ -214,6 +218,16 @@ final class ChatManager: ObservableObject {
                     conversationId: convId
                 )
             }
+        }
+
+        // Detect reminder / scheduled-task intent in user message (background, silent fail)
+        let sentText = text
+        let convId = conversation.id
+        Task {
+            _ = await ScheduledTaskManager.shared.detectAndSchedule(
+                from: sentText,
+                conversationId: convId
+            )
         }
     }
 
