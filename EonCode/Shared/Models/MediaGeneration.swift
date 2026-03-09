@@ -11,7 +11,7 @@ struct MediaGeneration: Codable, Identifiable {
     var thumbnailData: Data?
     var costUSD: Double
     var costSEK: Double
-    var model: String                // "grok-2-image"
+    var model: String                // "grok-imagine-image" / "grok-imagine-video"
     var parameters: MediaParameters
     var createdAt: Date
     var completedAt: Date?
@@ -20,7 +20,7 @@ struct MediaGeneration: Codable, Identifiable {
     init(
         type: MediaType,
         prompt: String,
-        model: String = "grok-2-image",
+        model: String = "grok-imagine-image",
         parameters: MediaParameters = MediaParameters()
     ) {
         self.id = UUID()
