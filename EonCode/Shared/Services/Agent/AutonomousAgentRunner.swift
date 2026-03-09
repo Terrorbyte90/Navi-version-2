@@ -66,7 +66,7 @@ final class AutonomousAgentRunner: ObservableObject {
         model: ClaudeModel,
         workerModel: ClaudeModel = .haiku,
         assignedWorkers: Int = 2,
-        maxTokensPerIteration: Int = 128000,
+        maxTokensPerIteration: Int = 16384,
         maxIterations: Int = 0,
         iterationDelaySeconds: Double = 0,
         autoRestartOnFailure: Bool = false,

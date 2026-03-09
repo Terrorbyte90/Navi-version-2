@@ -13,7 +13,7 @@ struct AgentDefinition: Identifiable, Codable, Equatable {
     var model: ClaudeModel                  // Primär modell (orkestrator)
     var workerModel: ClaudeModel            // Modell för workers (ofta billigare)
     var assignedWorkers: Int                // Antal parallella workers (1–10)
-    var maxTokensPerIteration: Int          // Alltid obegränsat (högt värde)
+    var maxTokensPerIteration: Int          // Max output-tokens per iteration (≤64000)
 
     // ── Beteende ────────────────────────────────────────────────────────────
     var maxIterations: Int                  // 0 = obegränsat
@@ -60,7 +60,7 @@ struct AgentDefinition: Identifiable, Codable, Equatable {
         model: ClaudeModel = .sonnet45,
         workerModel: ClaudeModel = .haiku,
         assignedWorkers: Int = 2,
-        maxTokensPerIteration: Int = 128000,
+        maxTokensPerIteration: Int = 16384,
         maxIterations: Int = 0,
         iterationDelaySeconds: Double = 0,
         autoRestartOnFailure: Bool = false,
