@@ -138,6 +138,36 @@ struct AgentRowView: View {
     let onPause: () -> Void
     let onDelete: () -> Void
     @State private var pulsing = false
+    @ObservedObject private var lockManager = FileLockManager.shared
+
+    /// Extracts the most specific directory component from the agent's current task
+    /// description (e.g. "Views/Agents" from a path like ".../Views/Agents/Foo.swift"),
+    /// falling back to the project name when no path is found.
+    private var workingDirectoryBadge: String? {
+        let text = agent.currentTaskDescription
+        // Look for a path-like token: contains "/" and at least one "." or known folder keyword
+        let words = text.components(separatedBy: .whitespaces)
+        for word in words {
+            let cleaned = word.trimmingCharacters(in: CharacterSet(charactersIn: ".,;:\"'()[]{}"))
+            guard cleaned.contains("/"), cleaned.count > 3 else { continue }
+            // Strip leading absolute path noise, keep last two components
+            let parts = cleaned.components(separatedBy: "/").filter { !$0.isEmpty }
+            if parts.count >= 2 {
+                let last = parts.last!
+                let second = parts[parts.count - 2]
+                // If the last part looks like a file (has extension), show parent dir
+                if last.contains(".") {
+                    return second
+                }
+                return "\(second)/\(last)"
+            } else if parts.count == 1 {
+                return parts[0]
+            }
+        }
+        // Fall back to project name
+        if let pn = agent.projectName, !pn.isEmpty { return pn }
+        return nil
+    }
 
     var statusColor: Color {
         switch agent.status {
@@ -194,6 +224,40 @@ struct AgentRowView: View {
                     if agent.assignedWorkers > 1 {
                         Label("\(agent.assignedWorkers) workers", systemImage: "person.2.fill")
                             .font(.system(size: 9)).foregroundColor(.secondary.opacity(0.5))
+                    }
+                }
+                // Directory assignment badge
+                if let dir = workingDirectoryBadge {
+                    HStack(spacing: 3) {
+                        Image(systemName: "folder.fill")
+                            .font(.system(size: 8))
+                        Text("working on: \(dir)")
+                            .font(.system(size: 10, design: .monospaced))
+                            .lineLimit(1)
+                    }
+                    .foregroundColor(.blue.opacity(0.75))
+                    .padding(.horizontal, 5).padding(.vertical, 2)
+                    .background(Color.blue.opacity(0.08))
+                    .cornerRadius(4)
+                }
+                // File locks
+                let lockedFiles = lockManager.lockedFiles(for: agent.id.uuidString)
+                if !lockedFiles.isEmpty {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 4) {
+                            ForEach(lockedFiles, id: \.self) { file in
+                                HStack(spacing: 3) {
+                                    Image(systemName: "lock.fill")
+                                        .font(.system(size: 8))
+                                    Text((file as NSString).lastPathComponent)
+                                        .font(.system(size: 10, design: .monospaced))
+                                }
+                                .foregroundColor(.orange.opacity(0.8))
+                                .padding(.horizontal, 5).padding(.vertical, 2)
+                                .background(Color.orange.opacity(0.1))
+                                .cornerRadius(4)
+                            }
+                        }
                     }
                 }
             }

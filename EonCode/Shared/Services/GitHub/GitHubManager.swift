@@ -215,6 +215,8 @@ final class GitHubManager: ObservableObject {
             let user = try await fetchUser(token: token)
             authState = .authorized(user: user)
             await fetchRepos()
+            // After successful token verification, start background sync
+            GitHubSyncService.shared.start()
         } catch {
             authState = .error(error.localizedDescription)
         }
@@ -450,6 +452,63 @@ final class GitHubManager: ObservableObject {
         // Refresh commit cache after push
         if push.success {
             commitCache["\(repo.fullName)/\(repo.currentBranch)"] = nil
+            // Mirror to backup branch (best-effort)
+            await ensureBackupBranch(for: repo)
+            if repo.currentBranch == repo.defaultBranch {
+                await pushToBackup(repo: repo)
+            }
+        }
+    }
+
+    // MARK: - Backup branch
+
+    /// Ensures a `backup` branch exists for the given repo. If not, creates it from the current branch.
+    func ensureBackupBranch(for repo: GitHubRepo) async {
+        guard let token else { return }
+        // Check if backup branch exists
+        let branches = await fetchBranches(for: repo)
+        if branches.contains(where: { $0.name == "backup" }) { return }
+        // Create backup branch from default branch via API
+        do {
+            struct RefObj: Codable { struct Obj: Codable { let sha: String }; let object: Obj }
+            let refReq = try makeRequest(path: "/repos/\(repo.fullName)/git/refs/heads/\(repo.defaultBranch)", token: token)
+            let (refData, refResp) = try await URLSession.shared.data(for: refReq)
+            try checkResponse(refResp, data: refData)
+            let sha = try JSONDecoder().decode(RefObj.self, from: refData).object.sha
+
+            var createReq = try makeRequest(path: "/repos/\(repo.fullName)/git/refs", token: token)
+            createReq.httpMethod = "POST"
+            createReq.httpBody = try JSONSerialization.data(withJSONObject: ["ref": "refs/heads/backup", "sha": sha])
+            createReq.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            let (_, createResp) = try await URLSession.shared.data(for: createReq)
+            _ = (createResp as? HTTPURLResponse)?.statusCode
+            // Invalidate branch cache so UI picks up the new branch
+            branchCache[repo.fullName] = nil
+        } catch {
+            // Best-effort, ignore errors
+        }
+    }
+
+    /// Mirrors the default branch to the backup branch after a push.
+    func pushToBackup(repo: GitHubRepo) async {
+        guard let token else { return }
+        // Get SHA of default branch
+        do {
+            struct RefObj: Codable { struct Obj: Codable { let sha: String }; let object: Obj }
+            let refReq = try makeRequest(path: "/repos/\(repo.fullName)/git/refs/heads/\(repo.defaultBranch)", token: token)
+            let (refData, refResp) = try await URLSession.shared.data(for: refReq)
+            try checkResponse(refResp, data: refData)
+            let sha = try JSONDecoder().decode(RefObj.self, from: refData).object.sha
+
+            // Update backup branch to same SHA (force update)
+            var updateReq = try makeRequest(path: "/repos/\(repo.fullName)/git/refs/heads/backup", token: token)
+            updateReq.httpMethod = "PATCH"
+            updateReq.httpBody = try JSONSerialization.data(withJSONObject: ["sha": sha, "force": true])
+            updateReq.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            let (_, updateResp) = try await URLSession.shared.data(for: updateReq)
+            _ = (updateResp as? HTTPURLResponse)?.statusCode
+        } catch {
+            // Backup is best-effort, ignore errors
         }
     }
 
@@ -491,6 +550,13 @@ final class GitHubManager: ObservableObject {
         syncStatus[repo.fullName] = pushResult.success ? "Auto-pushad ✓" : "Push misslyckades: \(pushResult.output)"
         // Invalidate commit cache so UI refreshes
         commitCache["\(repo.fullName)/\(repo.currentBranch)"] = nil
+        // Mirror to backup branch (best-effort)
+        if pushResult.success {
+            await ensureBackupBranch(for: repo)
+            if repo.currentBranch == repo.defaultBranch {
+                await pushToBackup(repo: repo)
+            }
+        }
     }
 
     // MARK: - Auto-create repo for new project

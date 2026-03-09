@@ -368,6 +368,7 @@ struct RepoWorkView: View {
     @State private var selectedTab = 0
     @State private var pullRequests: [GitHubPullRequest] = []
     @State private var isLoadingPRs = false
+    @State private var hasBackupBranch = false
 
     var currentRepo: GitHubRepo {
         gh.repos.first(where: { $0.id == repo.id }) ?? repo
@@ -413,6 +414,20 @@ struct RepoWorkView: View {
             }
 
             Spacer()
+
+            // Backup branch badge
+            if hasBackupBranch {
+                HStack(spacing: 3) {
+                    Image(systemName: "checkmark.shield.fill")
+                        .font(.system(size: 9))
+                    Text("backup")
+                        .font(.system(size: 10, weight: .medium))
+                }
+                .foregroundColor(.green)
+                .padding(.horizontal, 6).padding(.vertical, 3)
+                .background(Color.green.opacity(0.12))
+                .cornerRadius(5)
+            }
 
             // Sync status badge (read-only indicator)
             if let status = gh.syncStatus[repo.fullName] {
@@ -586,6 +601,7 @@ struct RepoWorkView: View {
         Task {
             isLoadingBranches = true
             branches = await gh.fetchBranches(for: repo, forceRefresh: true)
+            hasBackupBranch = branches.contains(where: { $0.name == "backup" })
             isLoadingBranches = false
             isLoadingCommits = true
             async let commitsTask = gh.fetchCommits(for: currentRepo, forceRefresh: true)

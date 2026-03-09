@@ -12,6 +12,7 @@ struct ChatView: View {
     @State private var showQueuePanel = false
     @State private var iterationCount = 1
     @State private var showIterationPicker = false
+    @State private var showSessionSummary = false
 
     @ObservedObject private var queue: PromptQueue
 
@@ -111,13 +112,44 @@ struct ChatView: View {
             }
             .background(Color.chatBackground)
 
+            if agent.isRunning && !agent.activeFileNames.isEmpty {
+                FileWaterfallOverlay(
+                    activeFiles: agent.activeFileNames,
+                    codeSnippet: agent.activeCodeSnippet.isEmpty ? nil : agent.activeCodeSnippet
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .allowsHitTesting(false)
+                .zIndex(5)
+            }
+
             if showQueuePanel {
                 QueuePanel(queue: queue, onClose: { showQueuePanel = false })
                     .transition(.move(edge: .trailing).combined(with: .opacity))
                     .zIndex(10)
             }
+
+            if showSessionSummary {
+                SessionSummaryView(agent: agent, onDismiss: {
+                    showSessionSummary = false
+                }, onPush: {
+                    showSessionSummary = false
+                    if let repo = GitHubManager.shared.repos.first(where: {
+                        $0.fullName == ProjectStore.shared.activeProject?.githubRepoFullName
+                    }) {
+                        Task {
+                            await GitHubManager.shared.autoCommitAndPush(repo: repo, changedFiles: agent.activeFileNames)
+                        }
+                    }
+                })
+                .zIndex(20)
+            }
         }
         .animation(.easeInOut(duration: 0.2), value: showQueuePanel)
+        .onChange(of: agent.isRunning) { _, isRunning in
+            if !isRunning && !agent.activeFileNames.isEmpty {
+                showSessionSummary = true
+            }
+        }
     }
 
     private func sendMessage() {
@@ -1274,4 +1306,234 @@ extension Image {
         self.init(uiImage: platformImage)
     }
     #endif
+}
+
+// MARK: - Rounded corner helper (iOS only)
+
+#if os(iOS)
+extension View {
+    func cornerRadius(_ radius: CGFloat, corners: UIRectCorner) -> some View {
+        clipShape(RoundedCorner(radius: radius, corners: corners))
+    }
+}
+
+struct RoundedCorner: Shape {
+    var radius: CGFloat = .infinity
+    var corners: UIRectCorner = .allCorners
+    func path(in rect: CGRect) -> Path {
+        let path = UIBezierPath(roundedRect: rect, byRoundingCorners: corners, cornerRadii: CGSize(width: radius, height: radius))
+        return Path(path.cgPath)
+    }
+}
+#endif
+
+// MARK: - Floating File Waterfall (shown while agent codes)
+
+struct FileWaterfallOverlay: View {
+    let activeFiles: [String]
+    let codeSnippet: String?
+
+    @State private var cards: [WaterfallCard] = []
+    @State private var timer: Timer?
+
+    struct WaterfallCard: Identifiable {
+        let id = UUID()
+        let fileName: String
+        let snippet: String
+        var opacity: Double = 1.0
+        var offsetY: CGFloat = 0
+        var scale: CGFloat = 1.0
+    }
+
+    var body: some View {
+        ZStack {
+            ForEach(cards) { card in
+                FloatingFileCard(fileName: card.fileName, snippet: card.snippet)
+                    .opacity(card.opacity)
+                    .scaleEffect(card.scale)
+                    .offset(x: CGFloat.random(in: -80...80), y: card.offsetY)
+                    .animation(.easeOut(duration: 2.5), value: card.offsetY)
+                    .animation(.easeOut(duration: 2.5), value: card.opacity)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .allowsHitTesting(false)
+        .onAppear { startEmitting() }
+        .onDisappear { stopEmitting() }
+        .onChange(of: activeFiles) { _, newFiles in
+            if let file = newFiles.first {
+                spawnCard(fileName: file, snippet: codeSnippet ?? "")
+            }
+        }
+    }
+
+    private func startEmitting() {
+        timer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { _ in
+            if let file = activeFiles.randomElement() {
+                spawnCard(fileName: file, snippet: codeSnippet ?? "")
+            }
+        }
+    }
+
+    private func stopEmitting() {
+        timer?.invalidate()
+        timer = nil
+    }
+
+    private func spawnCard(fileName: String, snippet: String) {
+        let card = WaterfallCard(fileName: fileName, snippet: snippet)
+        cards.append(card)
+        // Animate upward and fade out
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            if let idx = cards.firstIndex(where: { $0.id == card.id }) {
+                cards[idx].offsetY = -200
+                cards[idx].opacity = 0
+            }
+        }
+        // Remove after animation
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.8) {
+            cards.removeAll { $0.id == card.id }
+        }
+    }
+}
+
+struct FloatingFileCard: View {
+    let fileName: String
+    let snippet: String
+
+    private var fileExt: String { (fileName as NSString).pathExtension.lowercased() }
+    private var fileIcon: String {
+        switch fileExt {
+        case "swift": return "swift"
+        case "py": return "doc.text"
+        case "js", "ts": return "doc.text"
+        case "json": return "curlybraces"
+        case "md": return "doc.richtext"
+        default: return "doc.fill"
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 6) {
+                Image(systemName: fileIcon)
+                    .font(.system(size: 10))
+                    .foregroundColor(.accentNavi)
+                Text(fileName)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(.primary)
+                    .lineLimit(1)
+            }
+            if !snippet.isEmpty {
+                Text(snippet.prefix(60))
+                    .font(.system(size: 9, design: .monospaced))
+                    .foregroundColor(.secondary.opacity(0.7))
+                    .lineLimit(2)
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color.surfaceHover.opacity(0.9))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .strokeBorder(Color.accentNavi.opacity(0.3), lineWidth: 0.5)
+                )
+        )
+        .shadow(color: .black.opacity(0.2), radius: 4, x: 0, y: 2)
+        .frame(maxWidth: 180)
+    }
+}
+
+// MARK: - Session Summary (shown when agent completes)
+
+struct SessionSummaryView: View {
+    let agent: ProjectAgent
+    let onDismiss: () -> Void
+    let onPush: () -> Void
+
+    @State private var appeared = false
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Spacer()
+            VStack(alignment: .leading, spacing: 16) {
+                HStack(spacing: 10) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 22))
+                        .foregroundColor(.green)
+                    Text("Session klar")
+                        .font(.system(size: 18, weight: .bold))
+                    Spacer()
+                    Button(action: onDismiss) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 13))
+                            .foregroundColor(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                if !agent.activeFileNames.isEmpty {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Modifierade filer")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(.secondary)
+                        ForEach(Array(Set(agent.activeFileNames)).prefix(8), id: \.self) { file in
+                            HStack(spacing: 6) {
+                                Image(systemName: "doc.fill")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(.accentNavi.opacity(0.7))
+                                Text(file)
+                                    .font(.system(size: 12, design: .monospaced))
+                                    .foregroundColor(.primary)
+                                    .lineLimit(1)
+                            }
+                        }
+                    }
+                }
+
+                HStack(spacing: 12) {
+                    Button(action: onDismiss) {
+                        Text("Stäng")
+                            .font(.system(size: 14))
+                            .foregroundColor(.secondary)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 10)
+                            .background(Color.white.opacity(0.06))
+                            .cornerRadius(10)
+                    }
+                    .buttonStyle(.plain)
+
+                    Button(action: onPush) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "arrow.up.circle.fill")
+                                .font(.system(size: 14))
+                            Text("Push till GitHub")
+                                .font(.system(size: 14, weight: .semibold))
+                        }
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background(Color.accentNavi)
+                        .cornerRadius(10)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(20)
+            .background(Color.sidebarBackground)
+            #if os(iOS)
+            .cornerRadius(20, corners: [.topLeft, .topRight])
+            #else
+            .cornerRadius(20)
+            #endif
+            .offset(y: appeared ? 0 : 300)
+            .animation(.spring(response: 0.4, dampingFraction: 0.8), value: appeared)
+        }
+        .ignoresSafeArea()
+        .onAppear {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { appeared = true }
+        }
+    }
 }

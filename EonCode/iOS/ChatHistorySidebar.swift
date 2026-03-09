@@ -385,106 +385,6 @@ struct ChatHistorySidebar: View {
         }
     }
 
-    // MARK: - Plan history
-
-    var filteredPlans: [ProjectPlan] {
-        searchText.isEmpty
-            ? planManager.plans
-            : planManager.plans.filter { $0.title.localizedCaseInsensitiveContains(searchText) }
-    }
-
-    @ViewBuilder
-    var planHistory: some View {
-        if !filteredPlans.isEmpty {
-            VStack(alignment: .leading, spacing: 0) {
-                // Group by status
-                let active = filteredPlans.filter { $0.status == .active }
-                let drafts = filteredPlans.filter { $0.status == .draft }
-                let completed = filteredPlans.filter { $0.status == .completed }
-                let archived = filteredPlans.filter { $0.status == .archived }
-
-                if !active.isEmpty {
-                    sectionHeader("Aktiva")
-                    ForEach(active) { plan in planRow(plan) }
-                }
-                if !drafts.isEmpty {
-                    sectionHeader("Utkast")
-                    ForEach(drafts) { plan in planRow(plan) }
-                }
-                if !completed.isEmpty {
-                    sectionHeader("Klara")
-                    ForEach(completed) { plan in planRow(plan) }
-                }
-                if !archived.isEmpty {
-                    sectionHeader("Arkiverade")
-                    ForEach(archived) { plan in planRow(plan) }
-                }
-            }
-        } else if searchText.isEmpty {
-            emptyHistoryHint(icon: "map", text: "Inga planer ännu")
-        }
-    }
-
-    @ViewBuilder
-    private func planRow(_ plan: ProjectPlan) -> some View {
-        Button {
-            planManager.activePlan = plan
-            selectedTab = .plan
-            showSidebar = false
-        } label: {
-            HStack(spacing: 10) {
-                Image(systemName: plan.status.icon)
-                    .font(.system(size: 12))
-                    .foregroundColor(.secondary)
-                    .frame(width: 18)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(plan.title)
-                        .font(.system(size: 14))
-                        .foregroundColor(.primary)
-                        .lineLimit(1)
-                    if !plan.summary.isEmpty {
-                        Text(plan.summary)
-                            .font(.system(size: 11))
-                            .foregroundColor(.secondary)
-                            .lineLimit(1)
-                    } else {
-                        Text("\(plan.messages.count) meddelanden · \(plan.updatedAt.relativeString)")
-                            .font(.system(size: 11))
-                            .foregroundColor(.secondary)
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                if planManager.activePlan?.id == plan.id {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(.accentColor)
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-            .background(
-                planManager.activePlan?.id == plan.id
-                    ? Color.white.opacity(0.08) : Color.clear
-            )
-        }
-        .buttonStyle(.plain)
-        .contextMenu {
-            Button { planManager.updateStatus(plan, status: .active) } label: {
-                Label("Markera som aktiv", systemImage: "bolt")
-            }
-            Button { planManager.updateStatus(plan, status: .completed) } label: {
-                Label("Markera som klar", systemImage: "checkmark.seal")
-            }
-            Button { planManager.updateStatus(plan, status: .archived) } label: {
-                Label("Arkivera", systemImage: "archivebox")
-            }
-            Divider()
-            Button(role: .destructive) {
-                planManager.delete(plan)
-            } label: { Label("Radera", systemImage: "trash") }
-        }
-    }
-
     // MARK: - Browser history
 
     @ViewBuilder
@@ -903,7 +803,7 @@ struct ChatHistorySidebar: View {
             await projectStore.save(project)
             await MainActor.run {
                 projectStore.activeProject = project
-                selectedTab = .project
+                selectedTab = .code
                 showSidebar = false
             }
         }
