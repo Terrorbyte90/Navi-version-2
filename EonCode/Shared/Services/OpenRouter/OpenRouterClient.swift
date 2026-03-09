@@ -100,9 +100,12 @@ final class OpenRouterClient: ObservableObject {
             guard let choices = json["choices"] as? [[String: Any]],
                   let choice = choices.first else { continue }
 
-            if let delta = choice["delta"] as? [String: Any],
-               let content = delta["content"] as? String {
-                onEvent(.contentBlockDelta(index: 0, delta: .text(content)))
+            if let delta = choice["delta"] as? [String: Any] {
+                // Skip reasoning_content (chain-of-thought for reasoning models like Qwen3-Coder).
+                // Only emit actual content tokens to the UI.
+                if let content = delta["content"] as? String, !content.isEmpty {
+                    onEvent(.contentBlockDelta(index: 0, delta: .text(content)))
+                }
             }
 
             if let finishReason = choice["finish_reason"] as? String, finishReason == "stop" {

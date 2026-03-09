@@ -12,7 +12,6 @@ struct SidebarView: View {
     @StateObject private var store = ProjectStore.shared
     @StateObject private var agentPool = AgentPool.shared
     @StateObject private var chatManager = ChatManager.shared
-    @StateObject private var planManager = PlanManager.shared
     @StateObject private var artifactStore = ArtifactStore.shared
     @StateObject private var statusBroadcaster = DeviceStatusBroadcaster.shared
     @StateObject private var ghManager = GitHubManager.shared
@@ -85,10 +84,8 @@ struct SidebarView: View {
             // Contextual new-item button
             Button {
                 switch section {
-                case .pureChat:  _ = chatManager.newConversation()
-                case .planning:  _ = planManager.newPlan()
-                case .project:   showNewProject = true
-                case .agents:    NotificationCenter.default.post(name: .showCreateAgent, object: nil)
+                case .pureChat: _ = chatManager.newConversation()
+                case .agents:   NotificationCenter.default.post(name: .showCreateAgent, object: nil)
                 default: break
                 }
             } label: {
@@ -107,15 +104,15 @@ struct SidebarView: View {
     }
 
     private var canCreateNew: Bool {
-        section == .pureChat || section == .planning || section == .project || section == .agents
+        section == .pureChat || section == .code || section == .agents
     }
 
     private var newItemTooltip: String {
         switch section {
-        case .pureChat:  return "Ny chatt"
-        case .planning:  return "Ny plan"
-        case .agents:    return "Ny agent"
-        default:         return "Nytt projekt"
+        case .pureChat: return "Ny chatt"
+        case .code:     return "Nytt Code-projekt"
+        case .agents:   return "Ny agent"
+        default:        return "Ny"
         }
     }
 
@@ -147,14 +144,13 @@ struct SidebarView: View {
     private var searchPlaceholder: String {
         switch section {
         case .pureChat:  return "Sök chattar…"
-        case .planning:  return "Sök planer…"
+        case .code:      return "Sök Code-projekt…"
         case .artifacts: return "Sök artefakter…"
         case .github:    return "Sök repos…"
         case .agents:    return "Sök agenter…"
         case .media:     return "Sök media…"
         case .profile:   return "Profil"
         case .voice:     return "Röst"
-        default:         return "Sök projekt…"
         }
     }
 
@@ -162,20 +158,18 @@ struct SidebarView: View {
 
     var navSection: some View {
         VStack(alignment: .leading, spacing: 1) {
-            navItem(icon: "bubble.left.and.bubble.right.fill", label: "Chatt",       target: .pureChat)
-            navItem(icon: "folder.fill",                       label: "Projekt",     target: .project)
+            navItem(icon: "bubble.left.and.bubble.right.fill", label: "Chatt",      target: .pureChat)
+            navItem(icon: "chevron.left.forwardslash.chevron.right.circle.fill", label: "Code", target: .code)
             navItem(icon: "chevron.left.forwardslash.chevron.right", label: "GitHub", target: .github,
                     badge: githubBadge)
-            navItem(icon: "cpu.fill",                          label: "Agenter",     target: .agents,
+            navItem(icon: "cpu.fill",                          label: "Agenter",    target: .agents,
                     badge: agentsBadge)
-            navItem(icon: "map.fill",                          label: "Planera",     target: .planning)
-            navItem(icon: "globe",                             label: "Webb",        target: .browser)
-            navItem(icon: "photo.stack.fill",                  label: "Media",       target: .media,
+            navItem(icon: "photo.stack.fill",                  label: "Media",      target: .media,
                     badge: mediaBadge)
-            navItem(icon: "tray.2.fill",                       label: "Artefakter",  target: .artifacts,
+            navItem(icon: "tray.2.fill",                       label: "Artefakter", target: .artifacts,
                     badge: artifactStore.artifacts.isEmpty ? nil : "\(artifactStore.artifacts.count)")
-            navItem(icon: "person.crop.circle.fill",           label: "Profil",      target: .profile)
-            navItem(icon: "waveform",                          label: "Röst",        target: .voice)
+            navItem(icon: "person.crop.circle.fill",           label: "Profil",     target: .profile)
+            navItem(icon: "waveform",                          label: "Röst",       target: .voice)
         }
         .padding(.horizontal, 6)
     }
@@ -237,52 +231,67 @@ struct SidebarView: View {
     @ViewBuilder
     var contextualList: some View {
         switch section {
-        case .pureChat:            chatList
-        case .planning:            planList
-        case .artifacts:           artifactList
-        case .github:              githubRepoList
-        case .agents:              agentSidebarList
-        case .media:               mediaHistoryList
-        case .profile:             emptyHint(icon: "person.crop.circle", text: "AI-syntetiserad profil")
-        case .voice:               emptyHint(icon: "waveform", text: "Text till tal · Ljud · Röstdesign")
-        case .project, .browser:   projectList
+        case .pureChat:  chatList
+        case .code:      codeProjectList
+        case .artifacts: artifactList
+        case .github:    githubRepoList
+        case .agents:    agentSidebarList
+        case .media:     mediaHistoryList
+        case .profile:   emptyHint(icon: "person.crop.circle", text: "AI-syntetiserad profil")
+        case .voice:     emptyHint(icon: "waveform", text: "Text till tal · Ljud · Röstdesign")
+        }
+    }
+
+    var codeProjectList: some View {
+        let agent = CodeAgent.shared
+        return Group {
+            if agent.projects.isEmpty {
+                emptyHint(icon: "chevron.left.forwardslash.chevron.right.circle", text: "Inga Code-projekt ännu")
+            } else {
+                ForEach(agent.projects) { proj in
+                    Button {
+                        agent.selectProject(proj)
+                        section = .code
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: proj.currentPhase == .done ? "checkmark.circle.fill" : proj.currentPhase == .idle ? "circle" : "bolt.circle.fill")
+                                .font(.system(size: 13))
+                                .foregroundColor(proj.currentPhase == .done ? .green : proj.currentPhase == .idle ? .secondary : .orange)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(proj.name)
+                                    .font(.system(size: 13, weight: .medium))
+                                    .lineLimit(1)
+                                Text(proj.currentPhase.displayName)
+                                    .font(.system(size: 11))
+                                    .foregroundColor(.secondary)
+                            }
+                            Spacer()
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 7)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .background(
+                        agent.activeProject?.id == proj.id
+                            ? Color.accentNavi.opacity(0.08)
+                            : Color.clear
+                    )
+                    .overlay(
+                        agent.activeProject?.id == proj.id
+                            ? Rectangle().fill(Color.accentNavi).frame(width: 2).frame(maxHeight: .infinity, alignment: .leading)
+                            : nil,
+                        alignment: .leading
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                }
+            }
         }
     }
 
     // MARK: - Project list
 
-    var filteredProjects: [NaviProject] {
-        searchText.isEmpty ? store.projects
-            : store.projects.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
-    }
 
-    var projectList: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 1) {
-                let favs = filteredProjects.filter { $0.isFavorite }
-                let rest = filteredProjects.filter { !$0.isFavorite }
-
-                if !favs.isEmpty {
-                    listSectionHeader("Favoriter")
-                    ForEach(favs) { p in
-                        ProjectRow(project: p, selectedProject: $selectedProject)
-                            .onTapGesture { section = .project }
-                    }
-                }
-                if !rest.isEmpty {
-                    listSectionHeader(favs.isEmpty ? "Projekt" : "Alla projekt")
-                    ForEach(rest) { p in
-                        ProjectRow(project: p, selectedProject: $selectedProject)
-                            .onTapGesture { section = .project }
-                    }
-                }
-                if filteredProjects.isEmpty {
-                    emptyHint(icon: "folder", text: searchText.isEmpty ? "Inga projekt" : "Inga träffar")
-                }
-            }
-            .padding(.bottom, 8)
-        }
-    }
 
     // MARK: - Chat list
 
@@ -309,74 +318,6 @@ struct SidebarView: View {
                 }
             }
             .padding(.bottom, 8)
-        }
-    }
-
-    // MARK: - Plan list
-
-    var filteredPlans: [ProjectPlan] {
-        searchText.isEmpty ? planManager.plans
-            : planManager.plans.filter { $0.title.localizedCaseInsensitiveContains(searchText) }
-    }
-
-    var planList: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 1) {
-                let active    = filteredPlans.filter { $0.status == .active }
-                let drafts    = filteredPlans.filter { $0.status == .draft }
-                let completed = filteredPlans.filter { $0.status == .completed }
-
-                if !active.isEmpty    { listSectionHeader("Aktiva");   ForEach(active)    { planRow($0) } }
-                if !drafts.isEmpty    { listSectionHeader("Utkast");   ForEach(drafts)    { planRow($0) } }
-                if !completed.isEmpty { listSectionHeader("Klara");    ForEach(completed) { planRow($0) } }
-
-                if filteredPlans.isEmpty {
-                    emptyHint(icon: "map", text: searchText.isEmpty ? "Inga planer" : "Inga träffar")
-                }
-            }
-            .padding(.bottom, 8)
-        }
-    }
-
-    @ViewBuilder
-    private func planRow(_ plan: ProjectPlan) -> some View {
-        let isActive = planManager.activePlan?.id == plan.id
-        Button {
-            planManager.activePlan = plan
-            section = .planning
-        } label: {
-            HStack(spacing: 8) {
-                Image(systemName: plan.status.icon)
-                    .font(.system(size: 11))
-                    .foregroundColor(isActive ? .accentNavi : .secondary.opacity(0.5))
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(plan.title)
-                        .font(.system(size: 13, weight: isActive ? .semibold : .regular))
-                        .foregroundColor(isActive ? .white : .primary)
-                        .lineLimit(1)
-                    Text(plan.updatedAt.relativeString)
-                        .font(.system(size: 10))
-                        .foregroundColor(.secondary.opacity(0.45))
-                }
-                Spacer()
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(RoundedRectangle(cornerRadius: 7)
-                .fill(isActive ? Color.white.opacity(0.08) : Color.clear))
-        }
-        .buttonStyle(.plain)
-        .padding(.horizontal, 6)
-        .contextMenu {
-            Button { planManager.updateStatus(plan, status: .active) }
-                label: { Label("Markera aktiv", systemImage: "bolt") }
-            Button { planManager.updateStatus(plan, status: .completed) }
-                label: { Label("Markera klar", systemImage: "checkmark.seal") }
-            Button { planManager.updateStatus(plan, status: .archived) }
-                label: { Label("Arkivera", systemImage: "archivebox") }
-            Divider()
-            Button(role: .destructive) { planManager.delete(plan) }
-                label: { Label("Radera", systemImage: "trash") }
         }
     }
 

@@ -16,7 +16,6 @@ final class WorkerAgent: ObservableObject, Identifiable {
     @Published var filesWritten: [String] = []
     @Published var progress: Double = 0
 
-    private let claude = ClaudeAPIClient.shared
     private let executor: ToolExecutor
 
     init(task: WorkerTask, projectRoot: URL?, model: ClaudeModel = .haiku, projectID: UUID? = nil) {
@@ -60,13 +59,12 @@ final class WorkerAgent: ObservableObject, Identifiable {
             blockType = ""
 
             do {
-                try await claude.streamMessage(
+                try await ModelRouter.stream(
                     messages: messages,
                     model: model,
                     systemPrompt: workerSystemPrompt,
-                    tools: agentTools,
                     maxTokens: Constants.Agent.maxTokensDefault,
-                    usePromptCaching: false,
+                    tools: agentTools,
                     onEvent: { [weak self] event in
                         // WorkerAgent is @MainActor — direct mutation, no inner Task needed
                         self?.handleEvent(event,

@@ -302,24 +302,18 @@ struct PureChatView: View {
         VStack(spacing: 28) {
             Spacer()
             VStack(spacing: 14) {
-                // ChatGPT-green sparkle avatar — larger for empty state
+                // "N" monogram avatar — clean, Claude-style
                 ZStack {
                     Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [Color(red:0.455,green:0.667,blue:0.612), Color(red:0.3,green:0.55,blue:0.5)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(width: 56, height: 56)
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 24, weight: .semibold))
-                        .foregroundColor(.white)
+                        .fill(Color.accentNavi.opacity(0.10))
+                        .frame(width: 64, height: 64)
+                    Text("N")
+                        .font(.system(size: 30, weight: .semibold, design: .rounded))
+                        .foregroundColor(.accentNavi)
                 }
                 VStack(spacing: 5) {
                     Text("Hur kan jag hjälpa dig?")
-                        .font(.system(size: 22, weight: .semibold))
+                        .font(.system(size: 22, weight: .semibold, design: .rounded))
                         .foregroundColor(Color.primary)
                 }
             }

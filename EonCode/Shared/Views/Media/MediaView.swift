@@ -27,11 +27,26 @@ struct MediaView: View {
     #endif
 
     var body: some View {
-        #if os(macOS)
-        macLayout
-        #else
-        iOSLayout
-        #endif
+        ZStack(alignment: .top) {
+            #if os(macOS)
+            macLayout
+            #else
+            iOSLayout
+            #endif
+
+            if manager.showLimitReachedToast {
+                Text("Max 10 simultana genereringar nådda")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(Capsule().fill(Color.black.opacity(0.75)))
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .animation(.spring(response: 0.35, dampingFraction: 0.8), value: manager.showLimitReachedToast)
+                    .padding(.top, 12)
+            }
+        }
+        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: manager.showLimitReachedToast)
     }
 
     // MARK: - macOS Layout

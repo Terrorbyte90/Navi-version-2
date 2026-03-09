@@ -16,6 +16,7 @@ final class MediaGenerationManager: ObservableObject {
     @Published var generations: [MediaGeneration] = []
     @Published var balance: XAIBalance?
     @Published var isLoadingBalance = false
+    @Published var showLimitReachedToast = false
 
     private let maxConcurrent = 10
     private var saveDebounceTask: Task<Void, Never>? = nil
@@ -51,6 +52,7 @@ final class MediaGenerationManager: ObservableObject {
     ) async {
         guard canGenerate else {
             NaviLog.warning("MediaGen: max \(maxConcurrent) samtidiga genereringar nått")
+            showLimitToast()
             return
         }
 
@@ -116,6 +118,7 @@ final class MediaGenerationManager: ObservableObject {
     ) async {
         guard canGenerate else {
             NaviLog.warning("MediaGen: max \(maxConcurrent) samtidiga genereringar nått")
+            showLimitToast()
             return
         }
 
@@ -300,6 +303,14 @@ final class MediaGenerationManager: ObservableObject {
         }
         return thumbnail.jpegData(compressionQuality: 0.6)
         #endif
+    }
+
+    private func showLimitToast() {
+        showLimitReachedToast = true
+        Task {
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            showLimitReachedToast = false
+        }
     }
 
     private func updateGeneration(_ gen: MediaGeneration) {
