@@ -232,7 +232,16 @@ struct ChatHistorySidebar: View {
 
     @ViewBuilder
     var chatHistory: some View {
-        if !filteredChats.isEmpty {
+        if chatManager.isLoading {
+            VStack(spacing: 8) {
+                ProgressView().scaleEffect(0.8)
+                Text("Laddar chattar…")
+                    .font(.system(size: 12))
+                    .foregroundColor(.secondary)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.top, 24)
+        } else if !filteredChats.isEmpty {
             VStack(alignment: .leading, spacing: 0) {
                 sectionHeader("Chattar")
                 ForEach(filteredChats) { conv in

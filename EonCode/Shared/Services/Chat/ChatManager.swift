@@ -44,7 +44,8 @@ final class ChatManager: ObservableObject {
             let loaded = try await store.loadAll()
             let loadedIDs = Set(loaded.map(\.id))
             let unsaved = conversations.filter { !loadedIDs.contains($0.id) }
-            conversations = loaded + unsaved
+            // Maintain sort order after merging unsaved conversations
+            conversations = (loaded + unsaved).sorted { $0.updatedAt > $1.updatedAt }
         } catch {
             NaviLog.error("ChatManager: kunde inte ladda konversationer", error: error)
         }
