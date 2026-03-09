@@ -249,11 +249,12 @@ final class XAIClient: ObservableObject {
         }
 
         let results = items.compactMap { item -> XAIImageResult? in
-            if let url = item["url"] as? String {
-                return XAIImageResult(url: url, revisedPrompt: item["revised_prompt"] as? String)
-            }
+            // Prefer b64_json over URL — CDN URLs from imgen.x.ai fail on iOS
             if let b64 = item["b64_json"] as? String {
                 return XAIImageResult(b64: b64, revisedPrompt: item["revised_prompt"] as? String)
+            }
+            if let url = item["url"] as? String {
+                return XAIImageResult(url: url, revisedPrompt: item["revised_prompt"] as? String)
             }
             return nil
         }

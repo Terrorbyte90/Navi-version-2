@@ -77,17 +77,7 @@ final class MediaGenerationManager: ObservableObject {
                 if let url = result.url {
                     imageData = try await client.downloadImageData(from: url)
                 } else if let b64 = result.b64 {
-                    // xAI returns b64_json as "data:image/png;base64,<data>" — strip the prefix
-                    let rawBase64: String
-                    if let commaIdx = b64.firstIndex(of: ",") {
-                        rawBase64 = String(b64[b64.index(after: commaIdx)...])
-                    } else {
-                        rawBase64 = b64
-                    }
-                    guard let decoded = Data(base64Encoded: rawBase64, options: .ignoreUnknownCharacters) else {
-                        throw XAIError.invalidResponse
-                    }
-                    imageData = decoded
+                    imageData = try Self.decodeB64(b64)
                 } else {
                     throw XAIError.invalidResponse
                 }
@@ -251,6 +241,35 @@ final class MediaGenerationManager: ObservableObject {
         return root
             .appendingPathComponent(generation.iCloudSubfolder)
             .appendingPathComponent(filename)
+    }
+
+    // MARK: - Base64 decode helper
+
+    /// Decodes a base64 string from xAI.
+    /// Handles: data-URL prefix ("data:image/...;base64,DATA"), embedded whitespace/newlines,
+    /// and missing padding (xAI omits trailing '=' characters).
+    nonisolated static func decodeB64(_ raw: String) throws -> Data {
+        // 1. Strip data-URL prefix if present (e.g. "data:image/png;base64,...")
+        let stripped: String
+        if let commaRange = raw.range(of: ";base64,") {
+            stripped = String(raw[commaRange.upperBound...])
+        } else {
+            stripped = raw
+        }
+
+        // 2. Remove all whitespace (some APIs add line breaks every 76 chars)
+        let cleaned = stripped.components(separatedBy: .whitespacesAndNewlines).joined()
+
+        // 3. Add correct padding — xAI regularly omits trailing '=' characters
+        let rem = cleaned.count % 4
+        let padded = rem == 0 ? cleaned : cleaned + String(repeating: "=", count: 4 - rem)
+
+        // 4. Decode
+        guard let data = Data(base64Encoded: padded, options: .ignoreUnknownCharacters) else {
+            NaviLog.error("XAI b64 decode: \(padded.count) tecken, start: '\(padded.prefix(40))', slut: '\(padded.suffix(20))'")
+            throw XAIError.invalidResponse
+        }
+        return data
     }
 
     // nonisolated + static: safe to call from a Task.detached (no MainActor requirement)
