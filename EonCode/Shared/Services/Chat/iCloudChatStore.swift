@@ -18,6 +18,9 @@ final class iCloudChatStore: ObservableObject {
     func save(_ conversation: ChatConversation) async throws {
         guard let dir = containerURL else { throw ChatStoreError.iCloudUnavailable }
 
+        // Ensure directory exists before writing
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+
         let fileURL = dir.appendingPathComponent("\(conversation.id.uuidString).json")
         let data = try JSONEncoder().encode(conversation)
 
@@ -69,13 +72,20 @@ final class iCloudChatStore: ObservableObject {
     // MARK: - Load all
 
     func loadAll() async throws -> [ChatConversation] {
-        guard let dir = containerURL else { return [] }
+        guard let dir = containerURL else {
+            NaviLog.warning("iCloudChatStore: chatsDirectory är nil, returnerar tom lista")
+            return []
+        }
 
         return await withCheckedContinuation { cont in
             DispatchQueue.global(qos: .userInitiated).async {
+                // Ensure the directory exists before listing
+                try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+
                 guard let files = try? FileManager.default.contentsOfDirectory(
                     at: dir, includingPropertiesForKeys: nil
                 ) else {
+                    NaviLog.warning("iCloudChatStore: kunde inte lista filer i \(dir.path)")
                     cont.resume(returning: [])
                     return
                 }
@@ -94,6 +104,16 @@ final class iCloudChatStore: ObservableObject {
                             conversations.append(conv)
                         } catch {
                             NaviLog.error("iCloudChatStore: kunde inte läsa \(fileURL.lastPathComponent)", error: error)
+                        }
+                    }
+                    if let err = coordError {
+                        // If file coordination fails, try direct read as fallback
+                        do {
+                            let data = try Data(contentsOf: fileURL)
+                            let conv = try JSONDecoder().decode(ChatConversation.self, from: data)
+                            conversations.append(conv)
+                        } catch {
+                            NaviLog.error("iCloudChatStore: direkt läsning misslyckades för \(fileURL.lastPathComponent)", error: error)
                         }
                     }
                 }

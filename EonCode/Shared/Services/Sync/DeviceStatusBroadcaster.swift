@@ -64,12 +64,9 @@ final class DeviceStatusBroadcaster: ObservableObject {
         startWatching()
         startSignalMonitoring()
 
-        #if os(iOS)
-        Task {
-            LocalNetworkClient.shared.startAutoDiscovery()
-            PeerSyncEngine.shared.startBrowsing()
-        }
-        #endif
+        // Network discovery is already started in NaviApp.init() after a 0.5s delay.
+        // Don't duplicate it here — it causes double subnet scans and Bonjour browsing
+        // which floods the main thread with nw_connection callbacks.
     }
 
     // MARK: - Broadcast our status
@@ -79,7 +76,7 @@ final class DeviceStatusBroadcaster: ObservableObject {
         broadcastTask = Task {
             while !Task.isCancelled {
                 await broadcast()
-                let interval = localStatus.agentRunning ? 8.0 : 20.0
+                let interval = localStatus.agentRunning ? 15.0 : 60.0
                 try? await Task.sleep(for: .seconds(interval))
             }
         }
@@ -153,7 +150,7 @@ final class DeviceStatusBroadcaster: ObservableObject {
             while !Task.isCancelled {
                 await fetchRemoteStatus()
                 await detectConnectionMethod()
-                let interval = remoteMacIsOnline ? 8.0 : 15.0
+                let interval = remoteMacIsOnline ? 20.0 : 60.0
                 try? await Task.sleep(for: .seconds(interval))
             }
         }

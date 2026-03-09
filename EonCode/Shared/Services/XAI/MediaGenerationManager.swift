@@ -115,7 +115,12 @@ final class MediaGenerationManager: ObservableObject {
         }
 
         // Convert "width:height" ratio to "w:h" aspect ratio string for xAI
-        let aspectRatio = ratio == "1280:720" ? "16:9" : "9:16"
+        let aspectRatio: String
+        switch ratio {
+        case "1280:720":  aspectRatio = "16:9"
+        case "1280:1280": aspectRatio = "1:1"
+        default:          aspectRatio = "9:16"
+        }
 
         var gen = MediaGeneration(
             type: .video,

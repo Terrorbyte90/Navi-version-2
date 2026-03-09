@@ -9,14 +9,17 @@ struct ChatHistorySidebar: View {
     @Binding var showNewProject: Bool
     @Binding var selectedTab: AppTab
 
-    @StateObject private var chatManager = ChatManager.shared
-    @StateObject private var planManager = PlanManager.shared
-    @StateObject private var projectStore = ProjectStore.shared
-    @StateObject private var artifactStore = ArtifactStore.shared
-    @StateObject private var statusBroadcaster = DeviceStatusBroadcaster.shared
-    @StateObject private var ghManager = GitHubManager.shared
-    @StateObject private var agentPool = AgentPool.shared
-    @StateObject private var mediaManager = MediaGenerationManager.shared
+    // Use @ObservedObject for shared singletons — they're already alive.
+    // @StateObject was causing heavy re-init overhead every time the sidebar
+    // was mounted/unmounted (8 singletons × observation setup).
+    @ObservedObject private var chatManager = ChatManager.shared
+    @ObservedObject private var planManager = PlanManager.shared
+    @ObservedObject private var projectStore = ProjectStore.shared
+    @ObservedObject private var artifactStore = ArtifactStore.shared
+    @ObservedObject private var statusBroadcaster = DeviceStatusBroadcaster.shared
+    @ObservedObject private var ghManager = GitHubManager.shared
+    @ObservedObject private var agentPool = AgentPool.shared
+    @ObservedObject private var mediaManager = MediaGenerationManager.shared
 
     @State private var searchText = ""
     @State private var showSettings = false
@@ -45,6 +48,11 @@ struct ChatHistorySidebar: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.sidebarBackground)
         .ignoresSafeArea(edges: .vertical)   // let topBar/bottomBar handle safe area manually
+        .onAppear {
+            // Force-reload conversations when sidebar opens to ensure
+            // the latest data is shown (fixes empty chat list)
+            Task { await chatManager.load() }
+        }
         .sheet(isPresented: $showSettings) { SettingsView() }
         .sheet(isPresented: $showOpenProject) {
             iCloudProjectPicker { url in openProjectFromURL(url) }

@@ -48,6 +48,10 @@ struct MediaView: View {
             ))
             .frame(minWidth: 500, minHeight: 400)
         }
+        .sheet(item: $selectedGeneration) { gen in
+            MediaDetailView(generation: gen, manager: manager)
+                .frame(minWidth: 600, minHeight: 500)
+        }
     }
     #endif
 
@@ -69,6 +73,9 @@ struct MediaView: View {
                 get: { referenceImageData.map { [$0] } ?? [] },
                 set: { referenceImageData = $0.first }
             ))
+        }
+        .sheet(item: $selectedGeneration) { gen in
+            MediaDetailView(generation: gen, manager: manager)
         }
     }
 

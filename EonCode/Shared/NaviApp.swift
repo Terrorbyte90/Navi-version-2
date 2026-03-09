@@ -58,13 +58,11 @@ struct NaviApp: App {
                 .environmentObject(projectStore)
                 .onChange(of: scenePhase) { _, newPhase in
                     if newPhase == .active {
-                        // Aggressive re-connect + check handoff completions
+                        // Lightweight foreground check — heavy services are already
+                        // running from init(). Avoid re-launching discovery/browsing
+                        // here as it blocks the main thread and delays keyboard.
                         Task { @MainActor in
                             await DeviceStatusBroadcaster.shared.broadcast()
-                            await DeviceStatusBroadcaster.shared.fetchRemoteStatus()
-                            PeerSyncEngine.shared.startBrowsing()
-                            LocalNetworkClient.shared.startAutoDiscovery()
-                            await TaskHandoffManager.shared.checkForCompletions()
                         }
                     }
                 }
