@@ -128,6 +128,15 @@ final class KeychainManager {
         try KeychainSync.saveSync(key: Constants.Keychain.xaiKey, value: key)
     }
 
+    var openRouterAPIKey: String? {
+        KeychainSync.getSync(key: Constants.Keychain.openRouterKey)
+            ?? (try? get(key: Constants.Keychain.openRouterKey))
+    }
+
+    func saveOpenRouterKey(_ key: String) throws {
+        try KeychainSync.saveSync(key: Constants.Keychain.openRouterKey, value: key)
+    }
+
     func getKey(for service: String) -> String? {
         try? get(key: service)
     }

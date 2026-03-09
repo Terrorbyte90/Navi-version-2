@@ -215,46 +215,28 @@ struct PureChatView: View {
 
     @ViewBuilder
     var macModelBar: some View {
-        #if os(macOS)
         modelPickerBar
         Divider().opacity(0.08)
-        #endif
     }
 
-    // macOS top bar — Mockup11 / ChatGPT-style
+    // Model picker bar — shown on both macOS and iOS
     var modelPickerBar: some View {
         HStack(spacing: 8) {
-            // "Navi  ModelName ⌄"
             if let conv = conversation {
                 Menu {
                     Section("Anthropic") {
                         ForEach(ClaudeModel.anthropicModels) { model in
-                            Button {
-                                if let idx = manager.conversations.firstIndex(where: { $0.id == conv.id }) {
-                                    manager.conversations[idx].model = model
-                                    manager.activeConversation?.model = model
-                                }
-                            } label: {
-                                HStack {
-                                    Text(model.displayName)
-                                    if model == conv.model { Image(systemName: "checkmark") }
-                                }
-                            }
+                            modelMenuButton(model: model, currentModel: conv.model, convID: conv.id)
                         }
                     }
                     Section("xAI / Grok") {
                         ForEach(ClaudeModel.xaiModels) { model in
-                            Button {
-                                if let idx = manager.conversations.firstIndex(where: { $0.id == conv.id }) {
-                                    manager.conversations[idx].model = model
-                                    manager.activeConversation?.model = model
-                                }
-                            } label: {
-                                HStack {
-                                    Text(model.displayName)
-                                    if model == conv.model { Image(systemName: "checkmark") }
-                                }
-                            }
+                            modelMenuButton(model: model, currentModel: conv.model, convID: conv.id)
+                        }
+                    }
+                    Section("OpenRouter") {
+                        ForEach(ClaudeModel.openRouterModels) { model in
+                            modelMenuButton(model: model, currentModel: conv.model, convID: conv.id)
                         }
                     }
                 } label: {
@@ -293,10 +275,27 @@ struct PureChatView: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            #if os(macOS)
             .help("Ny chatt")
+            #endif
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
+    }
+
+    @ViewBuilder
+    private func modelMenuButton(model: ClaudeModel, currentModel: ClaudeModel, convID: UUID) -> some View {
+        Button {
+            if let idx = manager.conversations.firstIndex(where: { $0.id == convID }) {
+                manager.conversations[idx].model = model
+                manager.activeConversation?.model = model
+            }
+        } label: {
+            HStack {
+                Text(model.displayName)
+                if model == currentModel { Image(systemName: "checkmark") }
+            }
+        }
     }
 
     var chatEmptyState: some View {

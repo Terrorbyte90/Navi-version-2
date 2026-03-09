@@ -10,6 +10,7 @@ struct SettingsView: View {
     @State private var muxKey = ""
     @State private var githubToken = ""
     @State private var xaiKey = ""
+    @State private var openRouterKey = ""
     @State private var macServerURL = ""
     @State private var showAnthropicKey = false
     @State private var saveMessage = ""
@@ -226,6 +227,16 @@ struct SettingsView: View {
                 isRevealable: true
             )
 
+            // ── OpenRouter ───────────────────────────────────────────────────
+            APIKeyRow(
+                label: "OpenRouter",
+                icon: "arrow.triangle.branch",
+                placeholder: "sk-or-v1-…",
+                text: $openRouterKey,
+                hint: "Ger tillgång till MiniMax M2.5, Kimi K2.5 och Qwen3 Coder (gratis). Hämta nyckel på openrouter.ai.",
+                isRevealable: true
+            )
+
 
             // ── GitHub ───────────────────────────────────────────────────────
             APIKeyRow(
@@ -259,6 +270,7 @@ struct SettingsView: View {
             muxKey = KeychainManager.shared.muxAPIKey ?? ""
             githubToken = KeychainManager.shared.githubToken ?? ""
             xaiKey = KeychainManager.shared.xaiAPIKey ?? ""
+            openRouterKey = KeychainManager.shared.openRouterAPIKey ?? ""
             macServerURL = settings.macServerURL
         }
         .sheet(isPresented: $showAddKeySheet) {
@@ -401,6 +413,10 @@ struct SettingsView: View {
         }
         if !xaiKey.isBlank {
             try? KeychainManager.shared.saveXAIKey(xaiKey)
+            saved = true
+        }
+        if !openRouterKey.isBlank {
+            try? KeychainManager.shared.saveOpenRouterKey(openRouterKey)
             saved = true
         }
 
@@ -707,6 +723,9 @@ struct ModelPickerView: View {
 
             // xAI / Grok section
             modelSection(title: "xAI / Grok", icon: "bolt.fill", models: ClaudeModel.xaiModels)
+
+            // OpenRouter section
+            modelSection(title: "OpenRouter", icon: "arrow.triangle.branch", models: ClaudeModel.openRouterModels)
         }
     }
 

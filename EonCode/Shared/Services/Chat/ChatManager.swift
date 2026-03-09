@@ -167,6 +167,13 @@ final class ChatManager: ObservableObject {
                 systemPrompt: systemPrompt,
                 onEvent: eventHandler
             )
+        case .openRouter:
+            try await OpenRouterClient.shared.streamChatCompletion(
+                messages: apiMessages,
+                model: conversation.model,
+                systemPrompt: systemPrompt,
+                onEvent: eventHandler
+            )
         }
 
         // Calculate cost
