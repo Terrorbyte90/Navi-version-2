@@ -287,22 +287,10 @@ struct MediaView: View {
 
         return VStack(alignment: .leading, spacing: 12) {
             if !manager.activeGenerations.isEmpty {
-                ForEach(manager.activeGenerations) { gen in
-                    HStack(spacing: 10) {
-                        ProgressView().scaleEffect(0.7)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(gen.displayTitle)
-                                .font(.system(size: 13))
-                                .lineLimit(1)
-                            Text(gen.status.displayName)
-                                .font(.system(size: 11))
-                                .foregroundColor(.orange)
-                        }
-                        Spacer()
+                LazyVGrid(columns: columns, spacing: 12) {
+                    ForEach(manager.activeGenerations) { gen in
+                        generatingCard(gen)
                     }
-                    .padding(12)
-                    .background(Color.userBubble)
-                    .cornerRadius(12)
                 }
             }
 
@@ -324,6 +312,42 @@ struct MediaView: View {
             }
         }
         .padding(16)
+    }
+
+    // MARK: - Generating Card (shimmer placeholder)
+
+    @ViewBuilder
+    func generatingCard(_ gen: MediaGeneration) -> some View {
+        VStack(spacing: 0) {
+            ZStack {
+                ShimmerView()
+                    .frame(height: 160)
+                    .cornerRadius(10)
+
+                VStack(spacing: 8) {
+                    ProgressView()
+                        .tint(.white)
+                    Text(gen.status.displayName)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.9))
+                }
+            }
+            .frame(height: 160)
+            .clipped()
+            .cornerRadius(10)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(gen.displayTitle)
+                    .font(.system(size: 12))
+                    .lineLimit(2)
+                Text(gen.status.displayName)
+                    .font(.system(size: 10))
+                    .foregroundColor(.orange)
+            }
+            .padding(.horizontal, 8).padding(.vertical, 8)
+        }
+        .background(Color.userBubble)
+        .cornerRadius(12)
     }
 
     // MARK: - Controls Panel (macOS)
@@ -818,7 +842,7 @@ struct MediaView: View {
         errorMessage = nil
         isGenerating = true
 
-        let model = useProModel ? "grok-imagine-image-pro" : "grok-imagine-image"
+        let model = useProModel ? "grok-2-image-1212-pro" : "grok-2-image-1212"
         let capturedImageData = referenceImageData
         #if os(iOS)
         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
@@ -887,6 +911,38 @@ private struct ThumbnailImage: View {
         }
     }
     #endif
+}
+
+// MARK: - ShimmerView
+// A pulsing gradient overlay used as a loading placeholder in gallery cards.
+
+private struct ShimmerView: View {
+    @State private var phase: CGFloat = 0
+
+    var body: some View {
+        GeometryReader { geo in
+            let width = geo.size.width
+            LinearGradient(
+                colors: [
+                    Color.secondary.opacity(0.12),
+                    Color.secondary.opacity(0.28),
+                    Color.secondary.opacity(0.12)
+                ],
+                startPoint: .init(x: phase - 0.4, y: 0.5),
+                endPoint: .init(x: phase + 0.4, y: 0.5)
+            )
+            .onAppear {
+                withAnimation(
+                    .linear(duration: 1.4)
+                    .repeatForever(autoreverses: false)
+                ) {
+                    phase = 1.8
+                }
+            }
+            .frame(width: width)
+        }
+        .background(Color.surfaceHover)
+    }
 }
 
 // MARK: - Preview

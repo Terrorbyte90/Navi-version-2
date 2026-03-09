@@ -99,27 +99,39 @@ final class ElevenLabsClient: ObservableObject {
         }
     }
 
-    // MARK: - Core TTS fetch (low-latency turbo model)
+    // MARK: - Core TTS fetch (streaming endpoint — collects full audio before playback)
 
     func fetchAudio(text: String, apiKey: String, voiceID: String) async throws -> Data {
-        let url = URL(string: "\(Constants.API.elevenLabsBaseURL)/text-to-speech/\(voiceID)")!
+        let url = URL(string: "\(Constants.API.elevenLabsBaseURL)/text-to-speech/\(voiceID)/stream")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue(apiKey, forHTTPHeaderField: "xi-api-key")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("audio/mpeg", forHTTPHeaderField: "Accept")
 
         let body: [String: Any] = [
             "text": text,
-            "model_id": "eleven_turbo_v2_5",   // Low-latency multilingual model
+            "model_id": "eleven_multilingual_v2",
             "voice_settings": ["stability": 0.5, "similarity_boost": 0.75]
         ]
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        // Use bytes(for:) to stream — collect all chunks into Data before handing
+        // to AVAudioPlayer (which needs the complete file to decode the MP3 header).
+        let (byteStream, response) = try await URLSession.shared.bytes(for: request)
         guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
             throw ElevenLabsError.requestFailed
         }
-        return data
+
+        var audioData = Data()
+        for try await byte in byteStream {
+            audioData.append(byte)
+        }
+
+        guard !audioData.isEmpty else {
+            throw ElevenLabsError.requestFailed
+        }
+        return audioData
     }
 
     // MARK: - Public TTS (for VoiceView)

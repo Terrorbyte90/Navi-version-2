@@ -282,6 +282,24 @@ struct RepoRow: View {
     let repo: GitHubRepo
     let isSelected: Bool
     let onTap: () -> Void
+    @StateObject private var gh = GitHubManager.shared
+
+    /// Latest commit for this repo's current branch, from cache.
+    private var latestCommit: GitHubCommit? {
+        gh.commitCache["\(repo.fullName)/\(repo.currentBranch)"]?.first
+    }
+
+    private var commitMessage: String {
+        guard let c = latestCommit else { return "" }
+        return c.commit.message.components(separatedBy: "\n").first ?? c.commit.message
+    }
+
+    private var commitDate: String {
+        guard let c = latestCommit else { return "" }
+        let formatter = ISO8601DateFormatter()
+        if let d = formatter.date(from: c.commit.author.date) { return d.relativeString }
+        return c.commit.author.date
+    }
 
     var body: some View {
         Button(action: onTap) {
@@ -292,30 +310,31 @@ struct RepoRow: View {
                     .frame(width: 16)
 
                 VStack(alignment: .leading, spacing: 3) {
+                    // Row 1: repo name + branch indicator
                     HStack(spacing: 6) {
                         Text(repo.name)
                             .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
                             .foregroundColor(isSelected ? .white : .primary)
                             .lineLimit(1)
-                        if repo.isPrivate {
-                            Text("privat")
-                                .font(.system(size: 9, weight: .medium))
-                                .foregroundColor(.secondary)
-                                .padding(.horizontal, 5).padding(.vertical, 1)
-                                .background(Color.white.opacity(0.08))
-                                .cornerRadius(4)
-                        }
-                    }
-                    HStack(spacing: 8) {
                         HStack(spacing: 3) {
                             Image(systemName: "arrow.triangle.branch").font(.system(size: 9))
                             Text(repo.currentBranch).font(.system(size: 10))
                         }
-                        .foregroundColor(.secondary.opacity(0.6))
-                        if let lang = repo.language {
-                            Text(lang).font(.system(size: 10)).foregroundColor(.secondary.opacity(0.5))
+                        .foregroundColor(isSelected ? .white.opacity(0.6) : .secondary.opacity(0.55))
+                    }
+                    // Row 2: last commit message + date
+                    if !commitMessage.isEmpty {
+                        HStack(spacing: 4) {
+                            Text(commitMessage)
+                                .font(.system(size: 10))
+                                .foregroundColor(.secondary.opacity(0.65))
+                                .lineLimit(1)
+                            Spacer()
+                            Text(commitDate)
+                                .font(.system(size: 10))
+                                .foregroundColor(.secondary.opacity(0.4))
                         }
-                        Spacer()
+                    } else {
                         Text(repo.updatedAt.relativeString)
                             .font(.system(size: 10)).foregroundColor(.secondary.opacity(0.4))
                     }

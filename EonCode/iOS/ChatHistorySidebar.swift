@@ -10,7 +10,6 @@ struct ChatHistorySidebar: View {
     @Binding var selectedTab: AppTab
 
     @StateObject private var chatManager = ChatManager.shared
-    @StateObject private var planManager = PlanManager.shared
     @StateObject private var projectStore = ProjectStore.shared
     @StateObject private var artifactStore = ArtifactStore.shared
     @StateObject private var statusBroadcaster = DeviceStatusBroadcaster.shared
@@ -77,10 +76,7 @@ struct ChatHistorySidebar: View {
                     case .chat:
                         _ = chatManager.newConversation()
                         showSidebar = false
-                    case .plan:
-                        _ = planManager.newPlan()
-                        showSidebar = false
-                    case .project:
+                    case .code:
                         if let activeProject = projectStore.activeProject {
                             let agent = agentPool.agent(for: activeProject)
                             agent.newConversation()
@@ -96,7 +92,7 @@ struct ChatHistorySidebar: View {
                         .frame(width: 36, height: 36)
                 }
                 .buttonStyle(.plain)
-                .opacity(selectedTab == .chat || selectedTab == .plan || selectedTab == .project ? 1 : 0)
+                .opacity(selectedTab == .chat || selectedTab == .code ? 1 : 0)
             }
             .padding(.horizontal, 14)
             .padding(.top, topSafeArea + 8)
@@ -128,10 +124,7 @@ struct ChatHistorySidebar: View {
     }
 
     private var newItemIcon: String {
-        switch selectedTab {
-        case .plan: return "map.badge.plus"
-        default:    return "square.and.pencil"
-        }
+        return "square.and.pencil"
     }
 
     // MARK: - Nav shortcuts
@@ -141,11 +134,8 @@ struct ChatHistorySidebar: View {
             navItem(icon: "bubble.left.and.bubble.right.fill", label: "Chatt", isActive: selectedTab == .chat) {
                 selectedTab = .chat; showSidebar = false
             }
-            navItem(icon: "folder.fill", label: "Projekt", isActive: selectedTab == .project) {
-                selectedTab = .project; showSidebar = false
-            }
-            navItem(icon: "map.fill", label: "Planera", isActive: selectedTab == .plan) {
-                selectedTab = .plan; showSidebar = false
+            navItem(icon: "folder.fill", label: "Code", isActive: selectedTab == .code) {
+                selectedTab = .code; showSidebar = false
             }
             navItem(icon: "globe", label: "Webb", isActive: selectedTab == .browser) {
                 selectedTab = .browser; showSidebar = false
@@ -203,10 +193,8 @@ struct ChatHistorySidebar: View {
         switch selectedTab {
         case .chat:
             chatHistory
-        case .project:
+        case .code:
             projectHistory
-        case .plan:
-            planHistory
         case .browser:
             browserHistory
         case .artifacts:
@@ -317,7 +305,7 @@ struct ChatHistorySidebar: View {
     private func conversationRow(_ conv: Conversation, agent: ProjectAgent?) -> some View {
         Button {
             agent?.switchToConversation(conv)
-            selectedTab = .project
+            selectedTab = .code
             showSidebar = false
         } label: {
             HStack(spacing: 10) {
@@ -364,7 +352,7 @@ struct ChatHistorySidebar: View {
     private func projectRow(_ project: NaviProject) -> some View {
         Button {
             projectStore.activeProject = project
-            selectedTab = .project
+            selectedTab = .code
             showSidebar = false
         } label: {
             HStack(spacing: 10) {

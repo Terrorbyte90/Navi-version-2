@@ -98,7 +98,6 @@ struct ContentView: View {
     // NOTE: chatMgr is NOT here — it was causing ContentView to re-render
     // on every streaming token (every 60ms). It now lives in ChatNavTitle
     // and ChatNewButton which are isolated child structs.
-    @StateObject private var planMgr = PlanManager.shared
     @StateObject private var browserAgent = BrowserAgent.shared
 
     var iOSLayout: some View {
@@ -149,9 +148,9 @@ struct ContentView: View {
             NaviOrchestrator.shared.setActiveProject(newProject)
         }
         .onReceive(NotificationCenter.default.publisher(for: .didOpenGitHubProject)) { _ in
-            // Auto-switch to project tab when a GitHub repo is opened as project
+            // Auto-switch to code tab when a GitHub repo is opened as project
             withAnimation(.easeInOut(duration: 0.25)) {
-                selectedTab = .project
+                selectedTab = .code
                 showSidebar = false
             }
         }
@@ -164,9 +163,9 @@ struct ContentView: View {
         case .chat:
             viewName = "Chatt"
             viewPurpose = "Fri konversation utan projektkoppling."
-        case .project:
+        case .code:
             let name = activeProject?.name ?? "inget valt"
-            viewName = "Projekt (\(name))"
+            viewName = "Code (\(name))"
             viewPurpose = "Kodning och filhantering i projektet."
         case .browser:
             viewName = "Webb"
@@ -174,9 +173,6 @@ struct ContentView: View {
         case .artifacts:
             viewName = "Artefakter"
             viewPurpose = "Hantera genererade filer och resurser."
-        case .plan:
-            viewName = "Planera"
-            viewPurpose = "Skapa och hantera projektplaner."
         case .github:
             viewName = "GitHub"
             viewPurpose = "Hantera repos, PRs och issues."
@@ -236,12 +232,12 @@ struct ContentView: View {
             // streaming updates don't re-render the whole ContentView.
             ChatNavTitle()
 
-        case .project:
+        case .code:
             HStack(spacing: 5) {
                 Text("Navi")
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundColor(Color.primary)
-                Text(activeProject?.name ?? "Projekt")
+                Text(activeProject?.name ?? "Code")
                     .font(.system(size: 15))
                     .foregroundColor(Color.secondary)
                     .lineLimit(1)
@@ -266,26 +262,6 @@ struct ContentView: View {
                     .font(.system(size: 15))
                     .foregroundColor(Color.secondary)
             }
-
-        case .plan:
-            Menu {
-                Button("Ny plan") { _ = planMgr.newPlan() }
-            } label: {
-                HStack(spacing: 5) {
-                    Text("Navi")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(Color.primary)
-                    Text(planMgr.activePlan?.title ?? "Planera")
-                        .font(.system(size: 15))
-                        .foregroundColor(Color.secondary)
-                        .lineLimit(1)
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(Color.secondary.opacity(0.6))
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
 
         case .github:
             HStack(spacing: 5) {
@@ -351,7 +327,7 @@ struct ContentView: View {
                     .foregroundColor(Color.secondary)
             }
 
-        case .project:
+        case .code:
             HStack(spacing: 4) {
                 Circle()
                     .fill(statusBroadcaster.remoteMacIsOnline ? Color.green : Color.secondary.opacity(0.6))
@@ -366,13 +342,6 @@ struct ContentView: View {
                 .fill({ if case .working = browserAgent.status { return Color.green } else { return Color.secondary.opacity(0.6).opacity(0.4) } }())
                 .frame(width: 7, height: 7)
 
-        case .plan:
-            Button { _ = planMgr.newPlan() } label: {
-                Image(systemName: "square.and.pencil")
-                    .font(.system(size: 17))
-                    .foregroundColor(Color.secondary)
-            }
-
         default:
             Color.clear.frame(width: 1, height: 1)
         }
@@ -385,7 +354,7 @@ struct ContentView: View {
         switch selectedTab {
         case .chat:
             PureChatView()
-        case .project:
+        case .code:
             if let project = activeProject, let agent = activeAgent {
                 ChatView(agent: agent)
             } else {
@@ -395,8 +364,6 @@ struct ContentView: View {
             BrowserView()
         case .artifacts:
             ArtifactView()
-        case .plan:
-            PlanView()
         case .github:
             GitHubView()
         case .agents:
@@ -469,10 +436,9 @@ struct ContentView: View {
     private func appSectionForTab(_ tab: AppTab) -> AppSection {
         switch tab {
         case .chat: return .pureChat
-        case .project: return .project
+        case .code: return .project
         case .browser: return .browser
         case .artifacts: return .artifacts
-        case .plan: return .planning
         case .github: return .github
         case .agents: return .agents
         case .media: return .media
@@ -546,7 +512,7 @@ private struct ChatNavTitle: View {
 // MARK: - Tabs
 
 enum AppTab: Int, Hashable {
-    case chat, project, browser, artifacts, plan, github, agents, media, profile, voice
+    case chat, code, browser, artifacts, github, agents, media, profile, voice
 }
 
 // MARK: - macOS Main View
