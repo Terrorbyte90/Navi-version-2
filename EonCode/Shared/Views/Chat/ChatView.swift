@@ -95,6 +95,7 @@ struct ChatView: View {
                             .frame(maxWidth: .infinity, alignment: .center)
                             .padding(.vertical, 4)
                     }
+                    .background(Color.chatBackground.ignoresSafeArea(edges: .bottom))
                 }
                 .onChange(of: agent.conversation.messages.count) { _ in
                     scrollToBottom(proxy: proxy, animated: true)

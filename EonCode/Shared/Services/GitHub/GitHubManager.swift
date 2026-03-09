@@ -705,12 +705,383 @@ final class GitHubManager: ObservableObject {
             }
         }
         #else
-        // iOS: queue to Mac via InstructionQueue
-        let cmd = "git " + args.joined(separator: " ")
-        let instr = Instruction(instruction: cmd, projectID: nil)
-        await InstructionQueue.shared.enqueue(instr)
-        return GitResult(success: true, output: "Köad till Mac: \(cmd)")
+        // iOS: use GitHub REST API — no Mac required
+        return await runGitViaAPI(args)
         #endif
+    }
+
+    // MARK: - iOS: GitHub API-based git client
+
+    /// Staged files per local repo path, waiting to be committed & pushed.
+    private struct PendingCommit {
+        var repoFullName: String
+        var branch: String
+        var stagedFiles: [String: Data?]   // relative path → content (nil = deleted)
+        var pendingMessage: String?
+    }
+    private var pendingCommits: [String: PendingCommit] = [:]
+
+    /// Lightweight git metadata stored next to cloned files.
+    private struct GitMeta: Codable {
+        var repoFullName: String
+        var branch: String
+        var commitSHA: String
+    }
+
+    private func gitMetaPath(at repoPath: String) -> String { repoPath + "/.navi-git" }
+
+    private func saveGitMeta(at repoPath: String, repoFullName: String, branch: String, sha: String) {
+        let meta = GitMeta(repoFullName: repoFullName, branch: branch, commitSHA: sha)
+        if let data = try? JSONEncoder().encode(meta) {
+            FileManager.default.createFile(atPath: gitMetaPath(at: repoPath), contents: data)
+        }
+    }
+
+    private func loadGitMeta(at repoPath: String) -> GitMeta? {
+        guard let data = FileManager.default.contents(atPath: gitMetaPath(at: repoPath)) else { return nil }
+        return try? JSONDecoder().decode(GitMeta.self, from: data)
+    }
+
+    private func extractRepoFullName(from url: String) -> String? {
+        // Handles: https://github.com/owner/repo(.git)
+        //          https://x-access-token:...@github.com/owner/repo
+        let cleaned = url.replacingOccurrences(of: ".git", with: "")
+        let parts = cleaned.components(separatedBy: "github.com/")
+        guard let last = parts.last, last.contains("/") else { return nil }
+        return last
+    }
+
+    private func runGitViaAPI(_ args: [String]) async -> GitResult {
+        var remaining = args
+        var workDir: String?
+
+        if remaining.first == "-C", remaining.count >= 2 {
+            workDir = remaining[1]
+            remaining = Array(remaining.dropFirst(2))
+        }
+
+        guard let subcommand = remaining.first else {
+            return GitResult(success: false, output: "Inget git-subkommando")
+        }
+        let cmdArgs = Array(remaining.dropFirst())
+
+        switch subcommand {
+        case "clone":   return await apiClone(args: cmdArgs)
+        case "fetch":   return GitResult(success: true, output: "")
+        case "checkout": return await apiCheckout(args: cmdArgs, at: workDir)
+        case "pull":    return await apiPull(at: workDir, args: cmdArgs)
+        case "add":     return apiAdd(args: cmdArgs, at: workDir)
+        case "commit":  return apiCommit(args: cmdArgs, at: workDir)
+        case "push":    return await apiPush(at: workDir, args: cmdArgs)
+        case "status":  return await apiStatus(at: workDir)
+        case "log":     return await apiLog(at: workDir)
+        case "remote":  return GitResult(success: true, output: "")  // auth via token
+        default:
+            return GitResult(success: false, output: "iOS git: '\(subcommand)' ej implementerat")
+        }
+    }
+
+    // MARK: Clone
+
+    private func apiClone(args: [String]) async -> GitResult {
+        var branch: String?
+        var repoURL: String?
+        var dest: String?
+        var i = 0
+        while i < args.count {
+            if args[i] == "--branch", i + 1 < args.count { branch = args[i + 1]; i += 2; continue }
+            if repoURL == nil { repoURL = args[i] } else if dest == nil { dest = args[i] }
+            i += 1
+        }
+        guard let url = repoURL, let destPath = dest else {
+            return GitResult(success: false, output: "clone: URL och destination krävs")
+        }
+        guard let fullName = extractRepoFullName(from: url) else {
+            return GitResult(success: false, output: "clone: kan inte parsa repo från \(url)")
+        }
+        guard let token else { return GitResult(success: false, output: "GitHub token saknas") }
+
+        let targetBranch = branch ?? repos.first(where: { $0.fullName == fullName })?.defaultBranch ?? "main"
+
+        do {
+            try FileManager.default.createDirectory(atPath: destPath, withIntermediateDirectories: true)
+
+            // Get HEAD SHA for the branch
+            struct RefObj: Codable { struct Obj: Codable { let sha: String }; let object: Obj }
+            let refReq = try makeRequest(path: "/repos/\(fullName)/git/refs/heads/\(targetBranch)", token: token)
+            let (refData, refResp) = try await URLSession.shared.data(for: refReq)
+            try checkResponse(refResp, data: refData)
+            let headSHA = try JSONDecoder().decode(RefObj.self, from: refData).object.sha
+
+            // Get tree SHA from commit
+            struct CommitObj: Codable { struct Tree: Codable { let sha: String }; let tree: Tree }
+            let commitReq = try makeRequest(path: "/repos/\(fullName)/git/commits/\(headSHA)", token: token)
+            let (commitData, commitResp) = try await URLSession.shared.data(for: commitReq)
+            try checkResponse(commitResp, data: commitData)
+            let treeSHA = try JSONDecoder().decode(CommitObj.self, from: commitData).tree.sha
+
+            // Get recursive tree
+            struct TreeItem: Codable { let path: String; let type: String; let sha: String?; let size: Int? }
+            struct TreeResp: Codable { let tree: [TreeItem] }
+            let treeReq = try makeRequest(path: "/repos/\(fullName)/git/trees/\(treeSHA)?recursive=1", token: token)
+            let (treeData, treeResp) = try await URLSession.shared.data(for: treeReq)
+            try checkResponse(treeResp, data: treeData)
+            let items = try JSONDecoder().decode(TreeResp.self, from: treeData).tree
+
+            let fm = FileManager.default
+            // Create directories
+            for item in items where item.type == "tree" {
+                try? fm.createDirectory(atPath: destPath + "/" + item.path, withIntermediateDirectories: true)
+            }
+
+            // Download blobs (skip files > 1 MB to keep it fast)
+            for item in items where item.type == "blob" {
+                if let size = item.size, size > 1_000_000 { continue }
+                let filePath = destPath + "/" + item.path
+                let dirURL = URL(fileURLWithPath: filePath).deletingLastPathComponent()
+                try? fm.createDirectory(at: dirURL, withIntermediateDirectories: true)
+
+                struct ContentResp: Codable { let content: String?; let encoding: String? }
+                let cReq = try makeRequest(path: "/repos/\(fullName)/contents/\(item.path)?ref=\(targetBranch)", token: token)
+                let (cData, cResp) = try await URLSession.shared.data(for: cReq)
+                guard (cResp as? HTTPURLResponse)?.statusCode ?? 0 < 400 else { continue }
+                if let cr = try? JSONDecoder().decode(ContentResp.self, from: cData),
+                   let encoded = cr.content, cr.encoding == "base64" {
+                    let cleaned = encoded.replacingOccurrences(of: "\n", with: "")
+                    if let fileData = Data(base64Encoded: cleaned) {
+                        fm.createFile(atPath: filePath, contents: fileData)
+                    }
+                }
+            }
+
+            saveGitMeta(at: destPath, repoFullName: fullName, branch: targetBranch, sha: headSHA)
+            return GitResult(success: true, output: "Klonat \(fullName) (\(targetBranch)) ✓")
+        } catch {
+            return GitResult(success: false, output: "clone misslyckades: \(error.localizedDescription)")
+        }
+    }
+
+    // MARK: Pull
+
+    private func apiPull(at workDir: String?, args: [String]) async -> GitResult {
+        guard let path = workDir, let meta = loadGitMeta(at: path) else {
+            return GitResult(success: false, output: "pull: ingen git-metadata, klonat ej?")
+        }
+        let branch = args.last(where: { !$0.hasPrefix("-") && $0 != "origin" }) ?? meta.branch
+        // Re-use clone logic to refresh all files
+        let result = await apiClone(args: ["--branch", branch,
+                                           "https://github.com/\(meta.repoFullName)", path])
+        return GitResult(success: result.success,
+                         output: result.success ? "Uppdaterad (\(branch)) ✓" : result.output)
+    }
+
+    // MARK: Checkout
+
+    private func apiCheckout(args: [String], at workDir: String?) async -> GitResult {
+        guard let path = workDir, let meta = loadGitMeta(at: path) else {
+            return GitResult(success: false, output: "checkout: ingen git-metadata")
+        }
+        guard let token else { return GitResult(success: false, output: "GitHub token saknas") }
+
+        let isNew = args.contains("-b")
+        let branches = args.filter { !$0.hasPrefix("-") && !$0.hasPrefix("origin/") }
+        guard let target = branches.first else {
+            return GitResult(success: false, output: "checkout: branch saknas")
+        }
+
+        if isNew {
+            let base = args.first(where: { $0.hasPrefix("origin/") })
+                .map { String($0.dropFirst("origin/".count)) } ?? meta.branch
+            do {
+                struct RefObj: Codable { struct Obj: Codable { let sha: String }; let object: Obj }
+                let refReq = try makeRequest(path: "/repos/\(meta.repoFullName)/git/refs/heads/\(base)", token: token)
+                let (refData, refResp) = try await URLSession.shared.data(for: refReq)
+                try checkResponse(refResp, data: refData)
+                let sha = try JSONDecoder().decode(RefObj.self, from: refData).object.sha
+
+                var createReq = try makeRequest(path: "/repos/\(meta.repoFullName)/git/refs", token: token)
+                createReq.httpMethod = "POST"
+                createReq.httpBody = try JSONSerialization.data(withJSONObject: ["ref": "refs/heads/\(target)", "sha": sha])
+                createReq.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                let (_, createResp) = try await URLSession.shared.data(for: createReq)
+                try checkResponse(createResp, data: Data())
+
+                saveGitMeta(at: path, repoFullName: meta.repoFullName, branch: target, sha: sha)
+                return GitResult(success: true, output: "Branch '\(target)' skapad ✓")
+            } catch {
+                return GitResult(success: false, output: "checkout -b misslyckades: \(error.localizedDescription)")
+            }
+        } else {
+            return await apiPull(at: path, args: ["origin", target])
+        }
+    }
+
+    // MARK: Add (stage)
+
+    private func apiAdd(args: [String], at workDir: String?) -> GitResult {
+        guard let path = workDir, let meta = loadGitMeta(at: path) else {
+            return GitResult(success: false, output: "add: ingen git-metadata")
+        }
+        if pendingCommits[path] == nil {
+            pendingCommits[path] = PendingCommit(repoFullName: meta.repoFullName,
+                                                  branch: meta.branch,
+                                                  stagedFiles: [:])
+        }
+        let fm = FileManager.default
+        let addAll = args.contains("-A") || args.contains(".")
+        if addAll {
+            guard let enumerator = fm.enumerator(atPath: path) else {
+                return GitResult(success: false, output: "Kan inte läsa katalog")
+            }
+            while let file = enumerator.nextObject() as? String {
+                guard !file.hasPrefix(".") else { continue }
+                let fullPath = path + "/" + file
+                var isDir: ObjCBool = false
+                if fm.fileExists(atPath: fullPath, isDirectory: &isDir), !isDir.boolValue {
+                    pendingCommits[path]?.stagedFiles[file] = fm.contents(atPath: fullPath)
+                }
+            }
+        } else {
+            for arg in args {
+                let absPath = arg.hasPrefix("/") ? arg : path + "/" + arg
+                let relPath = arg.hasPrefix("/") ? String(arg.dropFirst(path.count + 1)) : arg
+                pendingCommits[path]?.stagedFiles[relPath] = fm.contents(atPath: absPath)
+            }
+        }
+        let count = pendingCommits[path]?.stagedFiles.count ?? 0
+        return GitResult(success: true, output: "\(count) fil(er) stagade")
+    }
+
+    // MARK: Commit (record message, actual push happens at push time)
+
+    private func apiCommit(args: [String], at workDir: String?) -> GitResult {
+        guard let path = workDir else { return GitResult(success: false, output: "commit: sökväg saknas") }
+        guard pendingCommits[path] != nil else {
+            return GitResult(success: false, output: "Inga stagade ändringar")
+        }
+        var message = "Navi auto-commit \(Date().formatted(.dateTime.hour().minute()))"
+        if let mIdx = args.firstIndex(of: "-m"), mIdx + 1 < args.count {
+            message = args[mIdx + 1]
+        }
+        pendingCommits[path]?.pendingMessage = message
+        return GitResult(success: true, output: "[staged] \(message)")
+    }
+
+    // MARK: Push via GitHub Git Data API
+
+    private func apiPush(at workDir: String?, args: [String]) async -> GitResult {
+        guard let path = workDir, var pending = pendingCommits[path] else {
+            return GitResult(success: false, output: "push: inga stagade ändringar att pusha")
+        }
+        guard let token else { return GitResult(success: false, output: "GitHub token saknas") }
+
+        let branch = pending.branch
+        let fullName = pending.repoFullName
+        let message = pending.pendingMessage ?? "Navi auto-commit \(Date().formatted(.dateTime.hour().minute()))"
+
+        do {
+            // 1. Current HEAD SHA
+            struct RefObj: Codable { struct Obj: Codable { let sha: String }; let object: Obj }
+            let refReq = try makeRequest(path: "/repos/\(fullName)/git/refs/heads/\(branch)", token: token)
+            let (refData, refResp) = try await URLSession.shared.data(for: refReq)
+            try checkResponse(refResp, data: refData)
+            let parentSHA = try JSONDecoder().decode(RefObj.self, from: refData).object.sha
+
+            // 2. Parent tree SHA
+            struct CommitObj: Codable { struct Tree: Codable { let sha: String }; let tree: Tree }
+            let commitReq = try makeRequest(path: "/repos/\(fullName)/git/commits/\(parentSHA)", token: token)
+            let (commitData, commitResp) = try await URLSession.shared.data(for: commitReq)
+            try checkResponse(commitResp, data: commitData)
+            let baseTreeSHA = try JSONDecoder().decode(CommitObj.self, from: commitData).tree.sha
+
+            // 3. Create blobs for staged files
+            struct BlobResp: Codable { let sha: String }
+            var treeEntries: [[String: Any]] = []
+
+            for (filePath, fileData) in pending.stagedFiles {
+                if let data = fileData {
+                    var blobReq = try makeRequest(path: "/repos/\(fullName)/git/blobs", token: token)
+                    blobReq.httpMethod = "POST"
+                    blobReq.httpBody = try JSONSerialization.data(withJSONObject: [
+                        "content": data.base64EncodedString(), "encoding": "base64"
+                    ])
+                    blobReq.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                    let (blobData, blobResp) = try await URLSession.shared.data(for: blobReq)
+                    try checkResponse(blobResp, data: blobData)
+                    let blobSHA = try JSONDecoder().decode(BlobResp.self, from: blobData).sha
+                    treeEntries.append(["path": filePath, "mode": "100644", "type": "blob", "sha": blobSHA])
+                } else {
+                    // Deletion: sha: null removes the file from the tree
+                    treeEntries.append(["path": filePath, "mode": "100644", "type": "blob", "sha": NSNull()])
+                }
+            }
+
+            // 4. New tree
+            struct TreeResp: Codable { let sha: String }
+            var treeReq = try makeRequest(path: "/repos/\(fullName)/git/trees", token: token)
+            treeReq.httpMethod = "POST"
+            treeReq.httpBody = try JSONSerialization.data(withJSONObject: ["base_tree": baseTreeSHA, "tree": treeEntries])
+            treeReq.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            let (treeData, treeResp) = try await URLSession.shared.data(for: treeReq)
+            try checkResponse(treeResp, data: treeData)
+            let newTreeSHA = try JSONDecoder().decode(TreeResp.self, from: treeData).sha
+
+            // 5. Create commit
+            struct NewCommitResp: Codable { let sha: String }
+            var newCommitReq = try makeRequest(path: "/repos/\(fullName)/git/commits", token: token)
+            newCommitReq.httpMethod = "POST"
+            newCommitReq.httpBody = try JSONSerialization.data(withJSONObject: [
+                "message": message, "tree": newTreeSHA, "parents": [parentSHA]
+            ])
+            newCommitReq.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            let (ncData, ncResp) = try await URLSession.shared.data(for: newCommitReq)
+            try checkResponse(ncResp, data: ncData)
+            let newSHA = try JSONDecoder().decode(NewCommitResp.self, from: ncData).sha
+
+            // 6. Update branch ref
+            var updateReq = try makeRequest(path: "/repos/\(fullName)/git/refs/heads/\(branch)", token: token)
+            updateReq.httpMethod = "PATCH"
+            updateReq.httpBody = try JSONSerialization.data(withJSONObject: ["sha": newSHA])
+            updateReq.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            let (_, updateResp) = try await URLSession.shared.data(for: updateReq)
+            try checkResponse(updateResp, data: Data())
+
+            pendingCommits[path] = nil
+            saveGitMeta(at: path, repoFullName: fullName, branch: branch, sha: newSHA)
+            commitCache["\(fullName)/\(branch)"] = nil
+            return GitResult(success: true, output: "Pushad \(newSHA.prefix(7)) → \(branch) ✓")
+        } catch {
+            return GitResult(success: false, output: "push misslyckades: \(error.localizedDescription)")
+        }
+    }
+
+    // MARK: Status
+
+    private func apiStatus(at workDir: String?) async -> GitResult {
+        guard let path = workDir else { return GitResult(success: true, output: "") }
+        if let pending = pendingCommits[path], !pending.stagedFiles.isEmpty {
+            let lines = pending.stagedFiles.keys.sorted().map { "M  \($0)" }.joined(separator: "\n")
+            return GitResult(success: true, output: lines)
+        }
+        return GitResult(success: true, output: "")
+    }
+
+    // MARK: Log
+
+    private func apiLog(at workDir: String?) async -> GitResult {
+        guard let path = workDir, let meta = loadGitMeta(at: path) else {
+            return GitResult(success: true, output: "Inga commits (ej klonat)")
+        }
+        guard let repo = repos.first(where: { $0.fullName == meta.repoFullName }) else {
+            return GitResult(success: true, output: "Repo \(meta.repoFullName) hittades inte i lokal cache")
+        }
+        let commits = await fetchCommits(for: repo, branch: meta.branch)
+        if commits.isEmpty { return GitResult(success: true, output: "Inga commits hittades") }
+        let log = commits.map { c in
+            let firstLine = c.commit.message.components(separatedBy: "\n").first ?? c.commit.message
+            return "\(c.sha.prefix(7)) \(c.commit.author.date.prefix(10)) \(c.commit.author.name): \(firstLine)"
+        }.joined(separator: "\n")
+        return GitResult(success: true, output: log)
     }
 }
 

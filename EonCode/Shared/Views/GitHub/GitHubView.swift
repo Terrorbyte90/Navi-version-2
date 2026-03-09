@@ -335,6 +335,8 @@ struct RepoRow: View {
 // MARK: - RepoWorkView
 // The main "work on this repo" view: branch picker, clone/open, commits, files, info.
 
+// GitHub view is read-only: browse repos, commits, PRs and files.
+// All write operations (push, pull, commit) are handled via the chat.
 struct RepoWorkView: View {
     let repo: GitHubRepo
     @StateObject private var gh = GitHubManager.shared
@@ -344,58 +346,25 @@ struct RepoWorkView: View {
     @State private var commits: [GitHubCommit] = []
     @State private var isLoadingBranches = false
     @State private var isLoadingCommits = false
-    @State private var isWorking = false          // cloning / opening
-    @State private var showCreateBranch = false
     @State private var selectedTab = 0
-    @State private var workStarted = false        // after "Börja arbeta" tapped
-    @State private var showCommitSheet = false
-    @State private var commitMessage = ""
     @State private var pullRequests: [GitHubPullRequest] = []
     @State private var isLoadingPRs = false
-    @State private var showCreatePR = false
 
     var currentRepo: GitHubRepo {
         gh.repos.first(where: { $0.id == repo.id }) ?? repo
-    }
-    var localPath: String? { gh.clonedRepos[repo.fullName] }
-    var syncStatus: String? { gh.syncStatus[repo.fullName] }
-    var isLinkedToProject: Bool {
-        gh.clonedRepos[repo.fullName] != nil
     }
 
     var body: some View {
         VStack(spacing: 0) {
             header
             Divider().opacity(0.12)
-
-            if workStarted || isLinkedToProject {
-                // Full detail view once working
-                tabBar
-                Divider().opacity(0.08)
-                tabContent
-            } else {
-                // "Start working" picker
-                startWorkingView
-            }
+            tabBar
+            Divider().opacity(0.08)
+            tabContent
         }
         .background(Color.chatBackground)
         .onAppear { loadData() }
         .onChange(of: currentRepo.currentBranch) { _ in reloadCommits() }
-        .sheet(isPresented: $showCreateBranch) {
-            CreateBranchSheet(repo: currentRepo, baseBranch: currentRepo.currentBranch)
-        }
-        .sheet(isPresented: $showCommitSheet) {
-            CommitAndPushSheet(repo: currentRepo) {
-                Task {
-                    commits = await gh.fetchCommits(for: currentRepo, forceRefresh: true)
-                }
-            }
-        }
-        .sheet(isPresented: $showCreatePR) {
-            CreatePRSheet(repo: currentRepo, branches: branches) {
-                Task { pullRequests = await gh.fetchPullRequests(for: currentRepo, forceRefresh: true) }
-            }
-        }
     }
 
     // MARK: - Header
@@ -426,8 +395,8 @@ struct RepoWorkView: View {
 
             Spacer()
 
-            // Sync status badge
-            if let status = syncStatus {
+            // Sync status badge (read-only indicator)
+            if let status = gh.syncStatus[repo.fullName] {
                 Text(status)
                     .font(.system(size: 11))
                     .foregroundColor(status.contains("✓") ? .green : .secondary)
@@ -436,114 +405,8 @@ struct RepoWorkView: View {
         .padding(.horizontal, 16).padding(.vertical, 12)
     }
 
-    // MARK: - Start working view (branch picker + action)
-
-    var startWorkingView: some View {
-        ScrollView {
-            VStack(spacing: 28) {
-                // Branch picker card
-                VStack(alignment: .leading, spacing: 14) {
-                    Label("Välj branch", systemImage: "arrow.triangle.branch")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(.primary)
-
-                    if isLoadingBranches {
-                        HStack(spacing: 8) {
-                            ProgressView().scaleEffect(0.7)
-                            Text("Hämtar branches…").font(.system(size: 13)).foregroundColor(.secondary)
-                        }
-                    } else {
-                        // Branch list
-                        VStack(spacing: 2) {
-                            ForEach(branches) { branch in
-                                BranchPickerRow(
-                                    branch: branch,
-                                    isSelected: branch.name == currentRepo.currentBranch,
-                                    isDefault: branch.name == repo.defaultBranch
-                                ) {
-                                    gh.setBranch(branch.name, for: repo.id)
-                                }
-                            }
-                        }
-                        .background(Color.white.opacity(0.04))
-                        .cornerRadius(10)
-
-                        // Create new branch
-                        Button {
-                            showCreateBranch = true
-                        } label: {
-                            HStack(spacing: 6) {
-                                Image(systemName: "plus.circle")
-                                    .font(.system(size: 13))
-                                Text("Ny branch…")
-                                    .font(.system(size: 13))
-                            }
-                            .foregroundColor(.accentNavi.opacity(0.8))
-                        }
-                        .buttonStyle(.plain)
-                        .padding(.top, 4)
-                    }
-                }
-                .padding(16)
-                .background(Color.white.opacity(0.05))
-                .cornerRadius(14)
-
-                // Selected branch summary
-                VStack(spacing: 6) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "arrow.triangle.branch")
-                            .font(.system(size: 13)).foregroundColor(.accentNavi)
-                        Text(currentRepo.currentBranch)
-                            .font(.system(size: 15, weight: .semibold))
-                    }
-                    Text("av \(repo.fullName)")
-                        .font(.system(size: 12)).foregroundColor(.secondary)
-                }
-
-                // Primary action button
-                Button {
-                    Task { await startWorking() }
-                } label: {
-                    HStack(spacing: 10) {
-                        if isWorking {
-                            ProgressView().scaleEffect(0.8).tint(.white)
-                            Text(localPath == nil ? "Klonar…" : "Öppnar…")
-                                .font(.system(size: 15, weight: .semibold))
-                                .foregroundColor(.white)
-                        } else {
-                            Image(systemName: localPath == nil ? "arrow.down.circle.fill" : "play.fill")
-                                .font(.system(size: 15))
-                            Text(localPath == nil ? "Klona & börja arbeta" : "Börja arbeta")
-                                .font(.system(size: 15, weight: .semibold))
-                        }
-                    }
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                    .background(Color.accentNavi)
-                    .cornerRadius(12)
-                }
-                .buttonStyle(.plain)
-                .disabled(isWorking)
-
-                // Quick info
-                HStack(spacing: 20) {
-                    if let lang = repo.language {
-                        Label(lang, systemImage: "doc.text")
-                            .font(.system(size: 11)).foregroundColor(.secondary)
-                    }
-                    Label(repo.isPrivate ? "Privat" : "Publik",
-                          systemImage: repo.isPrivate ? "lock" : "globe")
-                        .font(.system(size: 11)).foregroundColor(.secondary)
-                    Label("\(repo.stargazersCount) ★", systemImage: "star")
-                        .font(.system(size: 11)).foregroundColor(.secondary)
-                }
-            }
-            .padding(20)
-        }
-    }
-
-    // MARK: - Tab bar (after working)
+    // MARK: - Tab bar (read-only: browse commits, PRs, files, info)
+    // Write operations (push, pull, commit, create PR) are handled via the chat.
 
     var tabBar: some View {
         HStack(spacing: 0) {
@@ -554,19 +417,15 @@ struct RepoWorkView: View {
 
             Spacer()
 
-            // Branch picker inline
+            // Branch picker — view only, no write ops
             Menu {
                 ForEach(branches) { branch in
                     Button {
                         gh.setBranch(branch.name, for: repo.id)
-                        if let path = localPath {
-                            Task {
-                                await gh.switchBranch(to: branch.name, at: path)
-                                // Reload commits for new branch
-                                isLoadingCommits = true
-                                commits = await gh.fetchCommits(for: currentRepo, forceRefresh: true)
-                                isLoadingCommits = false
-                            }
+                        Task {
+                            isLoadingCommits = true
+                            commits = await gh.fetchCommits(for: currentRepo, forceRefresh: true)
+                            isLoadingCommits = false
                         }
                     } label: {
                         HStack {
@@ -577,10 +436,6 @@ struct RepoWorkView: View {
                             if branch.protected { Image(systemName: "lock.fill") }
                         }
                     }
-                }
-                Divider()
-                Button { showCreateBranch = true } label: {
-                    Label("Ny branch…", systemImage: "plus")
                 }
             } label: {
                 HStack(spacing: 4) {
@@ -595,7 +450,7 @@ struct RepoWorkView: View {
             }
             .buttonStyle(.plain)
 
-            // Refresh commits
+            // Refresh
             Button {
                 Task {
                     isLoadingCommits = true
@@ -608,27 +463,6 @@ struct RepoWorkView: View {
                     .frame(width: 24, height: 28).contentShape(Rectangle())
             }
             .buttonStyle(.plain).help("Uppdatera")
-
-            // Pull / Push
-            Button {
-                Task {
-                    await gh.pull(repo: currentRepo)
-                    // Refresh commits after pull
-                    commits = await gh.fetchCommits(for: currentRepo, forceRefresh: true)
-                }
-            } label: {
-                Image(systemName: "arrow.down.circle")
-                    .font(.system(size: 13)).foregroundColor(.secondary)
-                    .frame(width: 28, height: 28).contentShape(Rectangle())
-            }
-            .buttonStyle(.plain).help("Pull")
-
-            Button { showCommitSheet = true } label: {
-                Image(systemName: "arrow.up.circle")
-                    .font(.system(size: 13)).foregroundColor(.secondary)
-                    .frame(width: 28, height: 28).contentShape(Rectangle())
-            }
-            .buttonStyle(.plain).help("Commit & Push")
         }
         .padding(.horizontal, 12).padding(.vertical, 6)
     }
@@ -665,50 +499,31 @@ struct RepoWorkView: View {
         }
     }
 
-    // MARK: - Pull Requests tab
+    // MARK: - Pull Requests tab (read-only)
 
     var pullRequestsTab: some View {
-        VStack(spacing: 0) {
-            // Create PR button
-            HStack {
-                Spacer()
-                Button { showCreatePR = true } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "plus.circle.fill").font(.system(size: 12))
-                        Text("Ny PR").font(.system(size: 12, weight: .semibold))
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 1) {
+                if isLoadingPRs {
+                    ProgressView().frame(maxWidth: .infinity).padding(.top, 24)
+                } else if pullRequests.isEmpty {
+                    VStack(spacing: 8) {
+                        Image(systemName: "arrow.triangle.pull")
+                            .font(.system(size: 24)).foregroundColor(.secondary.opacity(0.2))
+                        Text("Inga öppna PRs").font(.system(size: 13)).foregroundColor(.secondary.opacity(0.4))
+                        Text("Skapa PRs via chatten")
+                            .font(.system(size: 11)).foregroundColor(.secondary.opacity(0.3))
                     }
-                    .foregroundColor(.accentNavi)
-                    .padding(.horizontal, 12).padding(.vertical, 6)
-                    .background(Color.accentNavi.opacity(0.12))
-                    .cornerRadius(8)
-                }
-                .buttonStyle(.plain)
-            }
-            .padding(.horizontal, 16).padding(.vertical, 8)
-
-            Divider().opacity(0.08)
-
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 1) {
-                    if isLoadingPRs {
-                        ProgressView().frame(maxWidth: .infinity).padding(.top, 24)
-                    } else if pullRequests.isEmpty {
-                        VStack(spacing: 8) {
-                            Image(systemName: "arrow.triangle.pull")
-                                .font(.system(size: 24)).foregroundColor(.secondary.opacity(0.2))
-                            Text("Inga öppna PRs").font(.system(size: 13)).foregroundColor(.secondary.opacity(0.4))
-                        }
-                        .frame(maxWidth: .infinity).padding(.top, 32)
-                    } else {
-                        ForEach(pullRequests) { pr in
-                            PRRow(pr: pr, repo: currentRepo) {
-                                Task { pullRequests = await gh.fetchPullRequests(for: currentRepo, forceRefresh: true) }
-                            }
+                    .frame(maxWidth: .infinity).padding(.top, 32)
+                } else {
+                    ForEach(pullRequests) { pr in
+                        PRRow(pr: pr, repo: currentRepo) {
+                            Task { pullRequests = await gh.fetchPullRequests(for: currentRepo, forceRefresh: true) }
                         }
                     }
                 }
-                .padding(.bottom, 16)
             }
+            .padding(.bottom, 16)
         }
         .onAppear {
             Task {
@@ -719,33 +534,10 @@ struct RepoWorkView: View {
         }
     }
 
-    // MARK: - Files tab
+    // MARK: - Files tab (via GitHub API — no local clone required)
 
     var filesTab: some View {
-        Group {
-            if let path = localPath {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Lokal sökväg:")
-                            .font(.system(size: 11)).foregroundColor(.secondary)
-                            .padding(.horizontal, 16).padding(.top, 12)
-                        Text(path)
-                            .font(.system(size: 11, design: .monospaced)).foregroundColor(.accentNavi)
-                            .padding(.horizontal, 16).padding(.bottom, 8)
-                        Divider().opacity(0.1)
-                        LocalFileList(path: path)
-                    }
-                }
-            } else {
-                VStack(spacing: 12) {
-                    Image(systemName: "folder.badge.questionmark")
-                        .font(.system(size: 36)).foregroundColor(.secondary.opacity(0.3))
-                    Text("Klona repot för att se filer")
-                        .font(.system(size: 13)).foregroundColor(.secondary.opacity(0.5))
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
-        }
+        GitHubFileTreeView(repo: currentRepo)
     }
 
     // MARK: - Info tab
@@ -791,21 +583,6 @@ struct RepoWorkView: View {
             commits = await gh.fetchCommits(for: currentRepo, forceRefresh: true)
             isLoadingCommits = false
         }
-    }
-
-    private func startWorking() async {
-        isWorking = true
-        // Pull latest if already cloned, else clone fresh
-        if localPath != nil {
-            await gh.switchBranch(to: currentRepo.currentBranch, at: localPath!)
-            await gh.pull(repo: currentRepo)
-        } else {
-            _ = await gh.cloneOrOpen(repo: currentRepo)
-        }
-        // Open as NaviProject
-        _ = await gh.openAsProject(repo: currentRepo)
-        isWorking = false
-        workStarted = true
     }
 
     @ViewBuilder
@@ -909,7 +686,191 @@ struct CommitRow: View {
     }
 }
 
-// MARK: - Local file list
+// MARK: - GitHub API File Tree (no local clone needed)
+
+struct GitHubFileTreeView: View {
+    let repo: GitHubRepo
+    @StateObject private var gh = GitHubManager.shared
+    @State private var items: [GitHubFileItem] = []
+    @State private var currentPath: String = ""
+    @State private var isLoading = false
+    @State private var pathStack: [String] = []  // breadcrumb
+
+    struct GitHubFileItem: Identifiable, Codable {
+        var id: String { sha + path }
+        let name: String
+        let path: String
+        let type: String  // "file" or "dir"
+        let sha: String
+        let size: Int?
+        let downloadURL: String?
+
+        enum CodingKeys: String, CodingKey {
+            case name, path, type, sha, size
+            case downloadURL = "download_url"
+        }
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Breadcrumb bar
+            if !pathStack.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 4) {
+                        Button {
+                            pathStack = []
+                            currentPath = ""
+                            loadItems(path: "")
+                        } label: {
+                            Text(repo.name)
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundColor(.accentNavi)
+                        }
+                        .buttonStyle(.plain)
+                        ForEach(Array(pathStack.enumerated()), id: \.offset) { idx, segment in
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 9)).foregroundColor(.secondary.opacity(0.4))
+                            Button {
+                                let newStack = Array(pathStack.prefix(idx + 1))
+                                let newPath = newStack.joined(separator: "/")
+                                pathStack = newStack
+                                currentPath = newPath
+                                loadItems(path: newPath)
+                            } label: {
+                                Text(segment)
+                                    .font(.system(size: 11, weight: .medium))
+                                    .foregroundColor(idx == pathStack.count - 1 ? .primary : .accentNavi)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.horizontal, 16).padding(.vertical, 8)
+                }
+                Divider().opacity(0.08)
+            }
+
+            if isLoading {
+                ProgressView().frame(maxWidth: .infinity).padding(.top, 32)
+            } else if items.isEmpty {
+                VStack(spacing: 8) {
+                    Image(systemName: "folder")
+                        .font(.system(size: 28)).foregroundColor(.secondary.opacity(0.2))
+                    Text("Tom katalog").font(.system(size: 13)).foregroundColor(.secondary.opacity(0.4))
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 1) {
+                        // Back button for sub-directories
+                        if !pathStack.isEmpty {
+                            Button {
+                                pathStack.removeLast()
+                                currentPath = pathStack.joined(separator: "/")
+                                loadItems(path: currentPath)
+                            } label: {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "arrow.up")
+                                        .font(.system(size: 11)).foregroundColor(.secondary.opacity(0.5))
+                                    Text("..").font(.system(size: 12, design: .monospaced)).foregroundColor(.secondary)
+                                }
+                                .padding(.horizontal, 16).padding(.vertical, 6)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        ForEach(items.sorted { a, b in
+                            // Dirs first, then files
+                            if a.type != b.type { return a.type == "dir" }
+                            return a.name < b.name
+                        }) { item in
+                            Button {
+                                if item.type == "dir" {
+                                    pathStack.append(item.name)
+                                    currentPath = item.path
+                                    loadItems(path: item.path)
+                                }
+                            } label: {
+                                HStack(spacing: 8) {
+                                    Image(systemName: fileIcon(item))
+                                        .font(.system(size: 12))
+                                        .foregroundColor(item.type == "dir" ? .accentNavi.opacity(0.8) : .secondary.opacity(0.5))
+                                        .frame(width: 16)
+                                    Text(item.name)
+                                        .font(.system(size: 13))
+                                        .foregroundColor(.primary)
+                                        .lineLimit(1)
+                                    Spacer()
+                                    if let size = item.size, item.type == "file" {
+                                        Text(formatSize(size))
+                                            .font(.system(size: 10, design: .monospaced))
+                                            .foregroundColor(.secondary.opacity(0.4))
+                                    }
+                                    if item.type == "dir" {
+                                        Image(systemName: "chevron.right")
+                                            .font(.system(size: 10)).foregroundColor(.secondary.opacity(0.3))
+                                    }
+                                }
+                                .padding(.horizontal, 16).padding(.vertical, 7)
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(item.type == "file")
+                        }
+                    }
+                    .padding(.bottom, 16)
+                }
+            }
+        }
+        .onAppear { loadItems(path: "") }
+        .onChange(of: repo.currentBranch) { _ in
+            pathStack = []; currentPath = ""; loadItems(path: "")
+        }
+    }
+
+    private func loadItems(path: String) {
+        isLoading = true
+        items = []
+        Task {
+            guard let token = gh.token else { isLoading = false; return }
+            let apiPath = path.isEmpty
+                ? "/repos/\(repo.fullName)/contents?ref=\(repo.currentBranch)"
+                : "/repos/\(repo.fullName)/contents/\(path)?ref=\(repo.currentBranch)"
+            guard let url = URL(string: "https://api.github.com" + apiPath) else { isLoading = false; return }
+            var req = URLRequest(url: url)
+            req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            req.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+            req.setValue("2022-11-28", forHTTPHeaderField: "X-GitHub-Api-Version")
+            req.timeoutInterval = 15
+            if let (data, _) = try? await URLSession.shared.data(for: req),
+               let decoded = try? JSONDecoder().decode([GitHubFileItem].self, from: data) {
+                await MainActor.run { items = decoded; isLoading = false }
+            } else {
+                await MainActor.run { isLoading = false }
+            }
+        }
+    }
+
+    private func fileIcon(_ item: GitHubFileItem) -> String {
+        if item.type == "dir" { return "folder.fill" }
+        switch (item.name as NSString).pathExtension.lowercased() {
+        case "swift": return "swift"
+        case "py": return "doc.text"
+        case "js", "ts", "jsx", "tsx": return "doc.text"
+        case "json": return "curlybraces"
+        case "md": return "doc.richtext"
+        case "png", "jpg", "jpeg", "gif", "svg": return "photo"
+        case "mp4", "mov": return "play.rectangle"
+        default: return "doc"
+        }
+    }
+
+    private func formatSize(_ bytes: Int) -> String {
+        if bytes < 1024 { return "\(bytes) B" }
+        if bytes < 1024 * 1024 { return "\(bytes / 1024) KB" }
+        return "\(bytes / (1024 * 1024)) MB"
+    }
+}
+
+// MARK: - Local file list (kept for macOS project view)
 
 struct LocalFileList: View {
     let path: String
@@ -1114,13 +1075,11 @@ struct CommitAndPushSheet: View {
 
 // MARK: - PR Row
 
+// PRRow is read-only — use chat to merge or create PRs.
 struct PRRow: View {
     let pr: GitHubPullRequest
     let repo: GitHubRepo
-    let onMerged: () -> Void
-    @StateObject private var gh = GitHubManager.shared
-    @State private var isMerging = false
-    @State private var mergeError = ""
+    let onMerged: () -> Void  // kept for API compatibility
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -1150,45 +1109,16 @@ struct PRRow: View {
 
                 Spacer()
 
-                if pr.state == "open" && pr.draft != true {
-                    Button {
-                        Task { await merge() }
-                    } label: {
-                        if isMerging {
-                            ProgressView().scaleEffect(0.6)
-                        } else {
-                            Text("Merge")
-                                .font(.system(size: 11, weight: .semibold))
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 10).padding(.vertical, 4)
-                                .background(Color.green.opacity(0.8))
-                                .cornerRadius(6)
-                        }
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(isMerging)
-                }
-            }
-
-            if !mergeError.isEmpty {
-                Text(mergeError)
-                    .font(.system(size: 11))
-                    .foregroundColor(.red)
+                // State badge (read-only)
+                Text(pr.draft == true ? "Draft" : pr.state == "open" ? "Open" : "Merged")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(pr.state == "open" ? .green : .purple)
+                    .padding(.horizontal, 7).padding(.vertical, 3)
+                    .background((pr.state == "open" ? Color.green : Color.purple).opacity(0.12))
+                    .cornerRadius(5)
             }
         }
         .padding(.horizontal, 16).padding(.vertical, 10)
-    }
-
-    private func merge() async {
-        isMerging = true
-        mergeError = ""
-        do {
-            try await gh.mergePullRequest(repo: repo, number: pr.number)
-            onMerged()
-        } catch {
-            mergeError = error.localizedDescription
-        }
-        isMerging = false
     }
 }
 

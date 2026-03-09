@@ -179,7 +179,7 @@ struct PureChatView: View {
                     .scrollDismissesKeyboard(.interactively)
                     .safeAreaInset(edge: .bottom, spacing: 0) {
                         chatInputBar
-                            .background(Color.chatBackground)
+                            .background(Color.chatBackground.ignoresSafeArea(edges: .bottom))
                     }
                     .onAppear { scrollProxy = proxy; scrollToBottom(proxy, animated: false) }
                     .onChange(of: conv.messages.count) { scrollToBottom(proxy, animated: true) }
@@ -188,11 +188,11 @@ struct PureChatView: View {
                     }
                 }
             } else {
-                ZStack(alignment: .bottom) {
-                    chatEmptyState
-                    chatInputBar
-                        .background(Color.chatBackground)
-                }
+                chatEmptyState
+                    .safeAreaInset(edge: .bottom, spacing: 0) {
+                        chatInputBar
+                            .background(Color.chatBackground.ignoresSafeArea(edges: .bottom))
+                    }
             }
         }
         .background(Color.chatBackground)
