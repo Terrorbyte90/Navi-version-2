@@ -611,22 +611,43 @@ struct MediaView: View {
     // MARK: - Active Generations List
 
     var activeGenerationsList: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Pågående (\(manager.activeGenerations.count))")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundColor(.secondary)
-
-            ForEach(manager.activeGenerations) { gen in
+        let inProgress = manager.activeGenerations
+        let failed = manager.generations.filter { $0.status == .failed }.prefix(3)
+        return VStack(alignment: .leading, spacing: 6) {
+            if !inProgress.isEmpty {
+                Text("Pågående (\(inProgress.count))")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(.secondary)
+                ForEach(inProgress) { gen in
+                    HStack(spacing: 8) {
+                        ProgressView().scaleEffect(0.6)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(gen.displayTitle).font(.system(size: 12)).lineLimit(1)
+                            Text(gen.status.displayName).font(.system(size: 10)).foregroundColor(.orange)
+                        }
+                        Spacer()
+                    }
+                    .padding(8)
+                    .background(Color.userBubble)
+                    .cornerRadius(6)
+                }
+            }
+            ForEach(Array(failed)) { gen in
                 HStack(spacing: 8) {
-                    ProgressView().scaleEffect(0.6)
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 11))
+                        .foregroundColor(.red)
                     VStack(alignment: .leading, spacing: 1) {
                         Text(gen.displayTitle).font(.system(size: 12)).lineLimit(1)
-                        Text(gen.status.displayName).font(.system(size: 10)).foregroundColor(.orange)
+                        Text(gen.error ?? "Okänt fel").font(.system(size: 10)).foregroundColor(.red).lineLimit(2)
                     }
                     Spacer()
+                    Button { Task { await manager.delete(gen) } } label: {
+                        Image(systemName: "xmark").font(.system(size: 10)).foregroundColor(.secondary)
+                    }.buttonStyle(.plain)
                 }
                 .padding(8)
-                .background(Color.userBubble)
+                .background(Color.red.opacity(0.06))
                 .cornerRadius(6)
             }
         }
@@ -791,6 +812,10 @@ struct MediaView: View {
                     duration: videoDuration,
                     ratio: videoRatio
                 )
+            }
+            // Bubble up any error from the generation
+            if let failed = manager.generations.first, failed.status == .failed {
+                errorMessage = failed.error ?? "Generering misslyckades. Kontrollera xAI API-nyckeln."
             }
             isGenerating = false
             if errorMessage == nil { prompt = "" }

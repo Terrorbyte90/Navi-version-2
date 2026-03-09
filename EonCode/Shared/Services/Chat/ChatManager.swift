@@ -119,6 +119,9 @@ final class ChatManager: ObservableObject {
 
         var fullText = ""
         var finalUsage: TokenUsage?
+        // Throttle UI updates: only publish streamingText every ~60ms (~16fps)
+        // to avoid re-rendering the entire chat view on every token
+        var lastPublish = Date.distantPast
 
         // Route streaming by provider
         let eventHandler: (StreamEvent) -> Void = { [self] event in
@@ -126,8 +129,12 @@ final class ChatManager: ObservableObject {
             case .contentBlockDelta(_, let delta):
                 if case .text(let chunk) = delta {
                     fullText += chunk
-                    self.streamingText = fullText
                     onToken(chunk)
+                    let now = Date()
+                    if now.timeIntervalSince(lastPublish) >= 0.06 {
+                        self.streamingText = fullText
+                        lastPublish = now
+                    }
                 }
             case .messageDelta(_, let usage):
                 finalUsage = usage

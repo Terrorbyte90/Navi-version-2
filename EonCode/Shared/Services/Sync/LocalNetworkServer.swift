@@ -320,26 +320,30 @@ final class LocalNetworkClient {
     func startAutoDiscovery() {
         discoveryTask?.cancel()
         discoveryTask = Task {
-            var failedPings = 0
+            var consecutiveFailures = 0
             while !Task.isCancelled {
-                let currentURL = macURL
-                let needsDiscovery: Bool
-                if let url = currentURL {
+                if let url = macURL {
                     let reachable = await ping(url)
                     if reachable {
-                        failedPings = 0
-                        needsDiscovery = false
+                        consecutiveFailures = 0
                     } else {
-                        failedPings += 1
-                        needsDiscovery = failedPings >= 2
+                        consecutiveFailures += 1
+                        if consecutiveFailures >= 2 {
+                            macURL = nil
+                            await discoverMac()
+                        }
                     }
                 } else {
-                    needsDiscovery = true
-                }
-                if needsDiscovery {
                     await discoverMac()
                 }
-                let interval: UInt64 = macURL != nil ? 10_000_000_000 : 20_000_000_000
+
+                // Exponential backoff: 30s when connected, longer when unreachable
+                // Caps at 5 minutes to avoid constant log spam when Mac is offline
+                let connectedInterval: UInt64 = 30_000_000_000 // 30s
+                let failureBackoff = UInt64(min(consecutiveFailures, 5)) * 60_000_000_000 // +60s per failure
+                let interval = macURL != nil
+                    ? connectedInterval
+                    : min(connectedInterval + failureBackoff, 300_000_000_000) // max 5min
                 try? await Task.sleep(nanoseconds: interval)
             }
         }
