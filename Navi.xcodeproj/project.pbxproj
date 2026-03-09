@@ -87,6 +87,9 @@
 		5D51EA6A5201CCB284E302E1 /* CodeEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 83122D995DEC960E5E3D0D7B /* CodeEditorView.swift */; };
 		5DD477B9975194FA53A3DC98 /* ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1275397756D5119B6F0CB4C6 /* ProfileView.swift */; };
 		5ED7A379C0D1FA1F397C5DE5 /* iCloudMemoryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 148E037F5901A54EFBA9F79B /* iCloudMemoryStore.swift */; };
+		04034FDCEF4F48CF9F794057 /* ProactiveNotificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A275BAE9EB754EABBE55A404 /* ProactiveNotificationManager.swift */; };
+		6A6795F83F0942D0A7E1A52B /* ScheduledTaskManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0BD6BBCA9C246D7ADA2104F /* ScheduledTaskManager.swift */; };
+		F6F9B1155E834E1ABBA9BCF9 /* ScheduledTask.swift in Sources */ = {isa = PBXBuildFile; fileRef = A85751FAE85E494DBF57054E /* ScheduledTask.swift */; };
 		5FE7DF79D2B953106E88A19D /* ScreenshotAnalyzer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E87C7BE71A8355DEDB314675 /* ScreenshotAnalyzer.swift */; };
 		60F963E927EE39B12DD39EEA /* ToolExecutor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 855D00DD3329EAD130B86696 /* ToolExecutor.swift */; };
 		619192741B45500629E98529 /* CostCalculator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42C5E877FCBF1B444E5F3AB2 /* CostCalculator.swift */; };
@@ -142,6 +145,9 @@
 		A283AD7F837799A305146589 /* UserProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05F8746B0FDC1B0FE7EE2711 /* UserProfile.swift */; };
 		A42154223F5651E1614BE276 /* StatusBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0979D68571B00B5A8C20148 /* StatusBarView.swift */; };
 		A48AF76267802F3A650BE578 /* iCloudMemoryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 148E037F5901A54EFBA9F79B /* iCloudMemoryStore.swift */; };
+		5A35A4B0AA414A7BA3FE92A3 /* ProactiveNotificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A275BAE9EB754EABBE55A404 /* ProactiveNotificationManager.swift */; };
+		7DFD8E998B9B4AFEB67F717D /* ScheduledTaskManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0BD6BBCA9C246D7ADA2104F /* ScheduledTaskManager.swift */; };
+		1A6BA518122645FCA65D1B34 /* ScheduledTask.swift in Sources */ = {isa = PBXBuildFile; fileRef = A85751FAE85E494DBF57054E /* ScheduledTask.swift */; };
 		A6A429BDD4F1698872E1EB08 /* CostCalculator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42C5E877FCBF1B444E5F3AB2 /* CostCalculator.swift */; };
 		A6B08E784D432F1C0AB0714B /* Conversation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A0E81CC749A52C56AC86712 /* Conversation.swift */; };
 		A6D4CAD45B348E387E6D41FA /* PageExtractor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A300F08E7E3325E6E59B6C4 /* PageExtractor.swift */; };
@@ -224,6 +230,9 @@
 		1275397756D5119B6F0CB4C6 /* ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileView.swift; sourceTree = "<group>"; };
 		13F42DAA141734671C814B49 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		148E037F5901A54EFBA9F79B /* iCloudMemoryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iCloudMemoryStore.swift; sourceTree = "<group>"; };
+		A275BAE9EB754EABBE55A404 /* ProactiveNotificationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProactiveNotificationManager.swift; sourceTree = "<group>"; };
+		C0BD6BBCA9C246D7ADA2104F /* ScheduledTaskManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduledTaskManager.swift; sourceTree = "<group>"; };
+		A85751FAE85E494DBF57054E /* ScheduledTask.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduledTask.swift; sourceTree = "<group>"; };
 		20CA34933ECFDD72D23FE7D5 /* ProcessManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProcessManager.swift; sourceTree = "<group>"; };
 		215B5630F5C90A41A92CEE6E /* DeviceStatusBroadcaster.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceStatusBroadcaster.swift; sourceTree = "<group>"; };
 		22C5904A31CA865599FBE864 /* XAIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XAIClient.swift; sourceTree = "<group>"; };
@@ -261,7 +270,7 @@
 		64B074907A2FB58C840C223A /* NaviApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NaviApp.swift; sourceTree = "<group>"; };
 		6FD7C47B7A159B2A9A089AB6 /* VersionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VersionStore.swift; sourceTree = "<group>"; };
 		7423689F437F42E5120BB320 /* Project.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Project.swift; sourceTree = "<group>"; };
-		753C94C08C53CB40589C21A4 /* Navi-iOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = "Navi-iOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		753C94C08C53CB40589C21A4 /* Navi-iOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Navi-iOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		7547E53210F7158811E0657B /* BrowserAgentLogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowserAgentLogView.swift; sourceTree = "<group>"; };
 		778D08B3D0DD0AD571D93118 /* TerminalExecutor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalExecutor.swift; sourceTree = "<group>"; };
 		778D32197C8BE96A9E02A02E /* InstructionQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstructionQueue.swift; sourceTree = "<group>"; };
@@ -509,6 +518,8 @@
 			isa = PBXGroup;
 			children = (
 				148E037F5901A54EFBA9F79B /* iCloudMemoryStore.swift */,
+				A275BAE9EB754EABBE55A404 /* ProactiveNotificationManager.swift */,
+				C0BD6BBCA9C246D7ADA2104F /* ScheduledTaskManager.swift */,
 				01628048B80A264616136454 /* MemoryManager.swift */,
 				97E3DE8BBA1E93EEC542497F /* UserProfileManager.swift */,
 			);
@@ -720,6 +731,7 @@
 				C09A7E41FD15D6E951893B64 /* AgentTask.swift */,
 				C49BB58E98745255FA2D8D44 /* Artifact.swift */,
 				A865364F7A70D8332F3B693F /* ChatConversation.swift */,
+				A85751FAE85E494DBF57054E /* ScheduledTask.swift */,
 				8A0E81CC749A52C56AC86712 /* Conversation.swift */,
 				BF1E145A4DCF8B170F35B55C /* FileNode.swift */,
 				045176D43F23786A48503C8F /* Instruction.swift */,
@@ -833,7 +845,6 @@
 						ProvisioningStyle = Automatic;
 					};
 					DAB8911160F888000AB35966 = {
-						DevelopmentTeam = DV646H5VDP;
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -983,6 +994,9 @@
 				40E1F3058BD80DF1790FDAD0 /* XcodeCrashHandler.swift in Sources */,
 				E962C945D913218F94004009 /* iCloudChatStore.swift in Sources */,
 				A48AF76267802F3A650BE578 /* iCloudMemoryStore.swift in Sources */,
+				04034FDCEF4F48CF9F794057 /* ProactiveNotificationManager.swift in Sources */,
+				6A6795F83F0942D0A7E1A52B /* ScheduledTaskManager.swift in Sources */,
+				F6F9B1155E834E1ABBA9BCF9 /* ScheduledTask.swift in Sources */,
 				7D3C7756C5CA9E722321CFA8 /* iCloudSyncEngine.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -1089,6 +1103,9 @@
 				CF2B64E5267FB33F41ECCE78 /* XAIClient.swift in Sources */,
 				09E648C20BB67F52CD813A15 /* iCloudChatStore.swift in Sources */,
 				5ED7A379C0D1FA1F397C5DE5 /* iCloudMemoryStore.swift in Sources */,
+				5A35A4B0AA414A7BA3FE92A3 /* ProactiveNotificationManager.swift in Sources */,
+				7DFD8E998B9B4AFEB67F717D /* ScheduledTaskManager.swift in Sources */,
+				1A6BA518122645FCA65D1B34 /* ScheduledTask.swift in Sources */,
 				B40C2F87CCB238A4E74F0447 /* iCloudSyncEngine.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -1248,7 +1265,7 @@
 				CODE_SIGN_ENTITLEMENTS = "EonCode/iOS/Navi-iOS.entitlements";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = DV646H5VDP;
+				DEVELOPMENT_TEAM = G648H762LD;
 				INFOPLIST_FILE = EonCode/iOS/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1289,7 +1306,7 @@
 				CODE_SIGN_ENTITLEMENTS = "EonCode/iOS/Navi-iOS.entitlements";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = DV646H5VDP;
+				DEVELOPMENT_TEAM = G648H762LD;
 				INFOPLIST_FILE = EonCode/iOS/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = (

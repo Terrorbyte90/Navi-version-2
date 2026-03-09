@@ -459,6 +459,11 @@ struct PureChatBubble: View {
                     }
                     .foregroundColor(textMuted)
                     .padding(.top, 2)
+
+                    // Memory context chips — show which facts Navi used in this response
+                    if !message.memoriesInContext.isEmpty {
+                        MemoryChipsRow(facts: message.memoriesInContext)
+                    }
                 }
 
                 Spacer(minLength: 40)
@@ -485,6 +490,52 @@ struct PureChatBubble: View {
                     }
                     #endif
                 }
+            }
+        }
+    }
+}
+
+// MARK: - Memory Chips Row
+
+/// Subtle row of tags showing which user memories Navi referenced in this response.
+struct MemoryChipsRow: View {
+    let facts: [String]
+    @State private var expanded = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) { expanded.toggle() }
+            } label: {
+                HStack(spacing: 5) {
+                    Image(systemName: "brain")
+                        .font(.system(size: 9))
+                    Text(expanded ? "Minnen använda" : "Minnen: \(facts.count)")
+                        .font(.system(size: 10, weight: .medium))
+                    Image(systemName: expanded ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 8, weight: .semibold))
+                }
+                .foregroundColor(.secondary.opacity(0.55))
+            }
+            .buttonStyle(.plain)
+
+            if expanded {
+                FlowLayout(spacing: 4) {
+                    ForEach(facts, id: \.self) { fact in
+                        Text(fact)
+                            .font(.system(size: 10))
+                            .foregroundColor(.secondary.opacity(0.75))
+                            .lineLimit(2)
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 3)
+                            .background(
+                                Capsule()
+                                    .fill(Color.accentNavi.opacity(0.08))
+                                    .overlay(Capsule().strokeBorder(Color.accentNavi.opacity(0.18), lineWidth: 0.5))
+                            )
+                    }
+                }
+                .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
     }

@@ -16,8 +16,6 @@ struct MediaView: View {
     @State private var videoDuration = 5
     @State private var videoRatio = "720:1280"
     @State private var selectedGeneration: MediaGeneration?
-    @State private var isGenerating = false
-    @State private var errorMessage: String?
     @FocusState private var promptFocused: Bool
 
     // Reference image (image-to-video / image-to-image)
@@ -65,7 +63,8 @@ struct MediaView: View {
     #if os(iOS)
     var iOSLayout: some View {
         VStack(spacing: 0) {
-            if manager.completedGenerations.isEmpty && !isGenerating {
+            // Show gallery as soon as any generation exists (active, failed, or completed)
+            if manager.generations.isEmpty {
                 emptyStateWithPrompt
             } else {
                 galleryWithPrompt
@@ -103,7 +102,7 @@ struct MediaView: View {
                     .font(.system(size: 22, weight: .semibold))
                 Text(selectedMode == .image
                      ? "Beskriv en bild så genererar Grok den åt dig."
-                     : "Beskriv en video så genererar xAI Aurora den åt dig.")
+                     : "Beskriv en video så genererar Grok den åt dig.")
                     .font(.system(size: 14))
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
@@ -246,24 +245,19 @@ struct MediaView: View {
                     .padding(.vertical, 10)
                     .padding(.leading, 4)
 
-                if isGenerating {
-                    ProgressView()
-                        .scaleEffect(0.7)
-                        .frame(width: 30, height: 30)
-                } else {
-                    Button(action: generate) {
-                        ZStack {
-                            Circle()
-                                .fill(canGenerate ? Color.orange : Color.secondary.opacity(0.2))
-                                .frame(width: 30, height: 30)
-                            Image(systemName: "wand.and.stars")
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundColor(canGenerate ? .white : .secondary.opacity(0.5))
-                        }
+                // Always show generate button — concurrent requests allowed up to maxConcurrent
+                Button(action: generate) {
+                    ZStack {
+                        Circle()
+                            .fill(canGenerate ? Color.orange : Color.secondary.opacity(0.2))
+                            .frame(width: 30, height: 30)
+                        Image(systemName: "wand.and.stars")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(canGenerate ? .white : .secondary.opacity(0.5))
                     }
-                    .buttonStyle(.plain)
-                    .disabled(!canGenerate)
                 }
+                .buttonStyle(.plain)
+                .disabled(!canGenerate)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 6)
@@ -286,6 +280,7 @@ struct MediaView: View {
         let columns = [GridItem(.adaptive(minimum: 160), spacing: 12)]
 
         return VStack(alignment: .leading, spacing: 12) {
+            // Active (generating) rows
             if !manager.activeGenerations.isEmpty {
                 ForEach(manager.activeGenerations) { gen in
                     HStack(spacing: 10) {
@@ -306,15 +301,29 @@ struct MediaView: View {
                 }
             }
 
-            if let error = errorMessage {
-                HStack(spacing: 6) {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundColor(.red).font(.system(size: 12))
-                    Text(error).font(.system(size: 12)).foregroundColor(.red.opacity(0.9))
+            // Failed generation rows (dismissable)
+            let failedGens = manager.generations.filter { $0.status == .failed }
+            if !failedGens.isEmpty {
+                ForEach(failedGens) { gen in
+                    HStack(spacing: 8) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundColor(.red).font(.system(size: 12))
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(gen.displayTitle)
+                                .font(.system(size: 12)).lineLimit(1)
+                            Text(gen.error ?? "Okänt fel")
+                                .font(.system(size: 11)).foregroundColor(.red.opacity(0.8)).lineLimit(2)
+                        }
+                        Spacer()
+                        Button { Task { await manager.delete(gen) } } label: {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 10)).foregroundColor(.secondary)
+                        }.buttonStyle(.plain)
+                    }
+                    .padding(10)
+                    .background(Color.red.opacity(0.08))
+                    .cornerRadius(8)
                 }
-                .padding(10)
-                .background(Color.red.opacity(0.08))
-                .cornerRadius(8)
             }
 
             LazyVGrid(columns: columns, spacing: 12) {
@@ -336,19 +345,8 @@ struct MediaView: View {
                 parameterControls
                 generateButton
 
-                if !manager.activeGenerations.isEmpty {
+                if !manager.activeGenerations.isEmpty || manager.generations.contains(where: { $0.status == .failed }) {
                     activeGenerationsList
-                }
-
-                if let error = errorMessage {
-                    HStack(spacing: 6) {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .foregroundColor(.red).font(.system(size: 12))
-                        Text(error).font(.system(size: 12)).foregroundColor(.red.opacity(0.9))
-                    }
-                    .padding(10)
-                    .background(Color.red.opacity(0.08))
-                    .cornerRadius(8)
                 }
             }
             .padding(20)
@@ -606,7 +604,7 @@ struct MediaView: View {
             HStack(spacing: 5) {
                 Image(systemName: "film.stack")
                     .font(.system(size: 10))
-                Text("Drivs av xAI Aurora")
+                Text("Drivs av grok-imagine-video")
                     .font(.system(size: 10))
             }
             .foregroundColor(.secondary.opacity(0.5))
@@ -621,12 +619,8 @@ struct MediaView: View {
     var generateButton: some View {
         Button(action: generate) {
             HStack(spacing: 8) {
-                if isGenerating {
-                    ProgressView().scaleEffect(0.7)
-                } else {
-                    Image(systemName: "wand.and.stars").font(.system(size: 14, weight: .medium))
-                }
-                Text(isGenerating ? "Genererar…" : "Generera")
+                Image(systemName: "wand.and.stars").font(.system(size: 14, weight: .medium))
+                Text("Generera")
                     .font(.system(size: 14, weight: .semibold))
             }
             .frame(maxWidth: .infinity)
@@ -797,57 +791,55 @@ struct MediaView: View {
         }
     }
 
+    // Prompt is non-empty, API key set, and manager hasn't hit max concurrent (10)
     private var canGenerate: Bool {
-        guard !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-              !isGenerating,
-              manager.canGenerate else { return false }
-        switch selectedMode {
-        case .image:
-            return KeychainManager.shared.xaiAPIKey?.isEmpty == false
-        case .video:
-            return KeychainManager.shared.xaiAPIKey?.isEmpty == false
-        }
+        !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && manager.canGenerate
+            && KeychainManager.shared.xaiAPIKey?.isEmpty == false
     }
 
     // MARK: - Generate Action
 
     private func generate() {
         let trimmed = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
+        guard canGenerate, !trimmed.isEmpty else { return }
 
-        errorMessage = nil
-        isGenerating = true
-
+        // Capture parameters before clearing state
         let model = useProModel ? "grok-imagine-image-pro" : "grok-imagine-image"
         let capturedImageData = referenceImageData
+        let capturedMode = selectedMode
+        let capturedVariations = imageVariations
+        let capturedSize = imageSize
+        let capturedDuration = videoDuration
+        let capturedRatio = videoRatio
+
+        // Clear prompt & reference image immediately — allows starting next generation right away
+        prompt = ""
+        referenceImageData = nil
+
         #if os(iOS)
         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
         #endif
         promptFocused = false
 
+        // Fire-and-forget — the manager tracks state; errors show as dismissable cards in gallery
         Task {
-            switch selectedMode {
+            switch capturedMode {
             case .image:
                 await manager.generateImage(
                     prompt: trimmed,
                     model: model,
-                    size: imageSize,
-                    variations: imageVariations
+                    size: capturedSize,
+                    variations: capturedVariations
                 )
             case .video:
                 await manager.generateVideo(
                     prompt: trimmed,
                     referenceImageData: capturedImageData,
-                    duration: videoDuration,
-                    ratio: videoRatio
+                    duration: capturedDuration,
+                    ratio: capturedRatio
                 )
             }
-            // Bubble up any error from the generation
-            if let failed = manager.generations.first, failed.status == .failed {
-                errorMessage = failed.error ?? "Generering misslyckades. Kontrollera xAI API-nyckeln."
-            }
-            isGenerating = false
-            if errorMessage == nil { prompt = "" }
         }
     }
 }

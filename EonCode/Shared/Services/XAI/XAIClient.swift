@@ -265,9 +265,11 @@ final class XAIClient: ObservableObject {
         return results
     }
 
-    // MARK: - Video Generation (Aurora)
+    // MARK: - Video Generation (grok-imagine-video)
 
     /// Submit a video generation task and poll until complete. Returns the finished video Data.
+    /// Docs: POST https://api.x.ai/v1/videos/generations  → { "request_id": "..." }
+    ///       GET  https://api.x.ai/v1/videos/{request_id} → { "status": "done", "video": { "url": "..." } }
     func generateVideo(
         prompt: String,
         imageData: Data? = nil,
@@ -277,15 +279,16 @@ final class XAIClient: ObservableObject {
         let headers = try authHeaders()
 
         var body: [String: Any] = [
-            "model": "aurora",
+            "model": "grok-imagine-video",
             "prompt": prompt,
             "duration": duration,
             "aspect_ratio": aspectRatio
         ]
 
+        // Image-to-video: pass as data URI (xAI accepts base64 data URIs for image_url)
         if let img = imageData {
             let base64 = img.base64EncodedString()
-            body["input_image"] = "data:image/jpeg;base64,\(base64)"
+            body["image_url"] = "data:image/jpeg;base64,\(base64)"
         }
 
         var request = URLRequest(url: URL(string: Constants.API.xaiVideoEndpoint)!)
@@ -301,33 +304,41 @@ final class XAIClient: ObservableObject {
         }
         guard httpResp.statusCode == 200 || httpResp.statusCode == 202 else {
             let errBody = String(data: data, encoding: .utf8) ?? "Unknown error"
+            NaviLog.error("XAI videogenerering HTTP \(httpResp.statusCode): \(errBody.prefix(300))")
             throw XAIError.apiError(httpResp.statusCode, errBody)
         }
 
         guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            NaviLog.error("XAI videogenerering: ej JSON-svar")
             throw XAIError.invalidResponse
         }
 
-        // Synchronous response: data[0].url present immediately
-        if let dataArr = obj["data"] as? [[String: Any]],
-           let first = dataArr.first,
-           let videoURL = first["url"] as? String {
+        NaviLog.info("XAI videogenerering svar: \(String(data: data, encoding: .utf8)?.prefix(400) ?? "")")
+
+        // Rare: synchronous response already includes video.url
+        if let video = obj["video"] as? [String: Any],
+           let videoURL = video["url"] as? String {
+            NaviLog.info("XAI video: synkront svar, laddar ner direkt")
             return try await downloadData(from: videoURL)
         }
 
-        // Async/task-based response: poll using task id
-        guard let taskId = obj["id"] as? String else {
+        // Normal: async task, poll using request_id
+        guard let requestId = obj["request_id"] as? String else {
+            NaviLog.error("XAI videogenerering: saknar request_id. Nycklar: \(Array(obj.keys))")
             throw XAIError.invalidResponse
         }
 
-        return try await pollVideoTask(taskId: taskId, headers: headers)
+        NaviLog.info("XAI videogenerering startat, request_id=\(requestId)")
+        return try await pollVideoTask(requestId: requestId, headers: headers)
     }
 
-    private func pollVideoTask(taskId: String, headers: [String: String]) async throws -> Data {
-        let statusURL = URL(string: "\(Constants.API.xaiVideoEndpoint)/\(taskId)")!
-        let maxAttempts = 60
+    /// Polls GET https://api.x.ai/v1/videos/{request_id} every 5s until status == "done".
+    private func pollVideoTask(requestId: String, headers: [String: String]) async throws -> Data {
+        // Poll URL: /v1/videos/{request_id}  — different from /v1/videos/generations/{id}
+        let statusURL = URL(string: "\(Constants.API.xaiVideoPollBase)/\(requestId)")!
+        let maxAttempts = 72 // 72 × 5s = 6 min max
 
-        for _ in 0..<maxAttempts {
+        for attempt in 0..<maxAttempts {
             try await Task.sleep(nanoseconds: 5_000_000_000) // 5s
 
             var req = URLRequest(url: statusURL)
@@ -337,6 +348,8 @@ final class XAIClient: ObservableObject {
             let (data, response) = try await session.data(for: req)
 
             guard let httpResp = response as? HTTPURLResponse, httpResp.statusCode == 200 else {
+                let code = (response as? HTTPURLResponse)?.statusCode ?? 0
+                NaviLog.error("XAI videostatus HTTP \(code) vid försök \(attempt)")
                 throw XAIError.invalidResponse
             }
 
@@ -344,27 +357,33 @@ final class XAIClient: ObservableObject {
                 throw XAIError.invalidResponse
             }
 
-            let status = obj["status"] as? String ?? ""
+            let status = obj["status"] as? String ?? "pending"
+            NaviLog.info("XAI videostatus [\(attempt)]: \(status)")
 
-            if status == "succeeded" || status == "completed" {
-                if let dataArr = obj["data"] as? [[String: Any]],
-                   let first = dataArr.first,
-                   let videoURL = first["url"] as? String {
+            switch status {
+            case "done":
+                // { "status": "done", "video": { "url": "...", "duration": N }, "model": "grok-imagine-video" }
+                if let video = obj["video"] as? [String: Any],
+                   let videoURL = video["url"] as? String {
+                    NaviLog.info("XAI video klar, laddar ner")
                     return try await downloadData(from: videoURL)
                 }
-                if let videoURL = obj["output_url"] as? String {
-                    return try await downloadData(from: videoURL)
-                }
+                NaviLog.error("XAI video done men saknar video.url. Nycklar: \(Array(obj.keys))")
                 throw XAIError.invalidResponse
-            }
 
-            if status == "failed" || status == "cancelled" {
-                let reason = obj["error"] as? String ?? "Okänt fel"
+            case "failed", "cancelled", "expired":
+                let reason = (obj["error"] as? String)
+                    ?? (obj["message"] as? String)
+                    ?? "Videogenerering misslyckades (status: \(status))"
                 throw XAIError.apiError(0, reason)
+
+            default:
+                // "pending" → continue polling
+                break
             }
         }
 
-        throw XAIError.apiError(0, "Videogenerering tog för lång tid (timeout).")
+        throw XAIError.apiError(0, "Videogenerering tog för lång tid (timeout efter \(maxAttempts * 5)s).")
     }
 
     // MARK: - Download data from URL

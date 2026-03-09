@@ -1,6 +1,6 @@
 import Foundation
 
-struct ProjectVersion: Identifiable, Codable, Equatable {
+struct ProjectVersion: Identifiable, Codable, Equatable, Hashable {
     var id: UUID
     var projectID: UUID
     var name: String
@@ -49,6 +49,10 @@ struct ProjectVersion: Identifiable, Codable, Equatable {
 
     static func == (lhs: ProjectVersion, rhs: ProjectVersion) -> Bool {
         lhs.id == rhs.id
+    }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
     }
 }
 
