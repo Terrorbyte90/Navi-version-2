@@ -318,7 +318,8 @@ final class LocalNetworkClient {
     }
 
     func startAutoDiscovery() {
-        discoveryTask?.cancel()
+        // Don't restart if already running — preserves backoff state
+        guard discoveryTask == nil || discoveryTask!.isCancelled else { return }
         discoveryTask = Task {
             var consecutiveFailures = 0
             while !Task.isCancelled {

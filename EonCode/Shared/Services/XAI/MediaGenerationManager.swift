@@ -72,7 +72,14 @@ final class MediaGenerationManager: ObservableObject {
             )
 
             for (i, result) in results.enumerated() {
-                let imageData = try await client.downloadImageData(from: result.url)
+                let imageData: Data
+                if let url = result.url {
+                    imageData = try await client.downloadImageData(from: url)
+                } else if let b64 = result.b64, let decoded = Data(base64Encoded: b64) {
+                    imageData = decoded
+                } else {
+                    throw XAIError.invalidResponse
+                }
                 let filename = "\(gen.id.uuidString)\(i > 0 ? "-\(i)" : "").png"
 
                 try await saveToICloud(data: imageData, folder: Constants.iCloud.mediaImagesFolder, filename: filename)

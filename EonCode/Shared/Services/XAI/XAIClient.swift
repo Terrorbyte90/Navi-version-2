@@ -191,18 +191,17 @@ final class XAIClient: ObservableObject {
 
     func generateImage(
         prompt: String,
-        model: String = "grok-imagine-image",
-        size: String = "1024x1024",
+        model: String = "grok-2-image",
+        size: String = "1024x1024",   // kept for API compat but not sent to xAI
         n: Int = 1
     ) async throws -> [XAIImageResult] {
         let headers = try authHeaders()
 
+        // xAI Aurora image API — only accepts model, prompt, n
         let body: [String: Any] = [
             "model": model,
             "prompt": prompt,
-            "n": n,
-            "size": size,
-            "response_format": "url"
+            "n": n
         ]
 
         var request = URLRequest(url: URL(string: Constants.API.xaiImageEndpoint)!)
@@ -223,9 +222,15 @@ final class XAIClient: ObservableObject {
             throw XAIError.invalidResponse
         }
 
-        return dataArr.compactMap { item in
-            guard let url = item["url"] as? String else { return nil }
-            return XAIImageResult(url: url, revisedPrompt: item["revised_prompt"] as? String)
+        return dataArr.compactMap { item -> XAIImageResult? in
+            // Prefer URL, fall back to base64
+            if let url = item["url"] as? String {
+                return XAIImageResult(url: url, revisedPrompt: item["revised_prompt"] as? String)
+            }
+            if let b64 = item["b64_json"] as? String {
+                return XAIImageResult(b64: b64, revisedPrompt: item["revised_prompt"] as? String)
+            }
+            return nil
         }
     }
 
@@ -376,8 +381,16 @@ final class XAIClient: ObservableObject {
 // MARK: - Types
 
 struct XAIImageResult {
-    let url: String
+    let url: String?       // HTTP URL to download (nil if b64)
+    let b64: String?       // Base64 PNG data (nil if url)
     let revisedPrompt: String?
+
+    init(url: String, revisedPrompt: String? = nil) {
+        self.url = url; self.b64 = nil; self.revisedPrompt = revisedPrompt
+    }
+    init(b64: String, revisedPrompt: String? = nil) {
+        self.url = nil; self.b64 = b64; self.revisedPrompt = revisedPrompt
+    }
 }
 
 struct XAIBalance {
