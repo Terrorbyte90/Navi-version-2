@@ -291,10 +291,7 @@ struct PureChatView: View {
     @ViewBuilder
     private func modelMenuButton(model: ClaudeModel, currentModel: ClaudeModel, convID: UUID) -> some View {
         Button {
-            if let idx = manager.conversations.firstIndex(where: { $0.id == convID }) {
-                manager.conversations[idx].model = model
-                manager.activeConversation?.model = model
-            }
+            manager.updateModel(model, for: convID)
         } label: {
             HStack {
                 Text(model.displayName)

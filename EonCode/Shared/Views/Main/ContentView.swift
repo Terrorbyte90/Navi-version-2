@@ -428,10 +428,8 @@ private struct ChatNavTitle: View {
         Menu {
             ForEach(ClaudeModel.allCases) { model in
                 Button {
-                    if let conv = chatMgr.activeConversation,
-                       let idx = chatMgr.conversations.firstIndex(where: { $0.id == conv.id }) {
-                        chatMgr.conversations[idx].model = model
-                        chatMgr.activeConversation = chatMgr.conversations[idx]
+                    if let conv = chatMgr.activeConversation {
+                        chatMgr.updateModel(model, for: conv.id)
                     }
                 } label: {
                     HStack {

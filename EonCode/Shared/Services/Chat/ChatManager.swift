@@ -45,6 +45,12 @@ final class ChatManager: ObservableObject {
             let loadedIDs = Set(loaded.map(\.id))
             let unsaved = conversations.filter { !loadedIDs.contains($0.id) }
             conversations = loaded + unsaved
+            // Re-sync activeConversation from the freshly loaded array
+            // so the model picker and sendMessage() always agree on the same struct
+            if let active = activeConversation,
+               let refreshed = conversations.first(where: { $0.id == active.id }) {
+                activeConversation = refreshed
+            }
         } catch {
             NaviLog.error("ChatManager: kunde inte ladda konversationer", error: error)
         }
@@ -236,6 +242,23 @@ final class ChatManager: ObservableObject {
                 conversationId: convId
             )
         }
+    }
+
+    // MARK: - Update model (persists immediately to prevent iCloud sync race)
+    // Bug: picking a model updates in-memory state but iCloud sync (debounced 1s)
+    // reloads conversations from disk, overwriting the in-memory model change.
+    // Fix: save immediately so any subsequent iCloud reload gets the correct model.
+
+    func updateModel(_ model: ClaudeModel, for conversationID: UUID) {
+        guard let idx = conversations.firstIndex(where: { $0.id == conversationID }) else { return }
+        conversations[idx].model = model
+        // Re-assign activeConversation from the array (value-type copy with updated model)
+        if activeConversation?.id == conversationID {
+            activeConversation = conversations[idx]
+        }
+        // Persist immediately — this is the critical part
+        let conv = conversations[idx]
+        Task { try? await store.save(conv) }
     }
 
     // MARK: - Delete
