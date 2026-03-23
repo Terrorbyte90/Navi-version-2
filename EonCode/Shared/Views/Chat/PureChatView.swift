@@ -188,8 +188,11 @@ struct PureChatView: View {
                     }
                 }
             } else {
-                ZStack(alignment: .bottom) {
+                ScrollView {
                     chatEmptyState
+                }
+                .scrollDismissesKeyboard(.interactively)
+                .safeAreaInset(edge: .bottom, spacing: 0) {
                     chatInputBar
                         .background(Color.chatBackground)
                 }
@@ -221,53 +224,37 @@ struct PureChatView: View {
         #endif
     }
 
-    // macOS top bar — Mockup11 / ChatGPT-style
+    // Model picker bar — shown on both macOS and iOS
     var modelPickerBar: some View {
         HStack(spacing: 8) {
-            // "Navi  ModelName ⌄"
             if let conv = conversation {
                 Menu {
                     Section("Anthropic") {
                         ForEach(ClaudeModel.anthropicModels) { model in
-                            Button {
-                                if let idx = manager.conversations.firstIndex(where: { $0.id == conv.id }) {
-                                    manager.conversations[idx].model = model
-                                    manager.activeConversation?.model = model
-                                }
-                            } label: {
-                                HStack {
-                                    Text(model.displayName)
-                                    if model == conv.model { Image(systemName: "checkmark") }
-                                }
-                            }
+                            modelMenuButton(model: model, currentModel: conv.model, convID: conv.id)
                         }
                     }
                     Section("xAI / Grok") {
                         ForEach(ClaudeModel.xaiModels) { model in
-                            Button {
-                                if let idx = manager.conversations.firstIndex(where: { $0.id == conv.id }) {
-                                    manager.conversations[idx].model = model
-                                    manager.activeConversation?.model = model
-                                }
-                            } label: {
-                                HStack {
-                                    Text(model.displayName)
-                                    if model == conv.model { Image(systemName: "checkmark") }
-                                }
-                            }
+                            modelMenuButton(model: model, currentModel: conv.model, convID: conv.id)
+                        }
+                    }
+                    Section("OpenRouter") {
+                        ForEach(ClaudeModel.openRouterModels) { model in
+                            modelMenuButton(model: model, currentModel: conv.model, convID: conv.id)
                         }
                     }
                 } label: {
                     HStack(spacing: 5) {
                         Text("Navi")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(Color.primary)
+                            .font(.system(size: 14, weight: .bold, design: .rounded))
+                            .foregroundColor(Color.accentNavi)
                         Text(conv.model.displayName)
                             .font(.system(size: 14))
                             .foregroundColor(Color.secondary)
                         Image(systemName: "chevron.down")
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundColor(Color.secondary.opacity(0.6))
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundColor(Color.accentNavi.opacity(0.75))
                     }
                     .padding(.horizontal, 4)
                 }
@@ -275,8 +262,8 @@ struct PureChatView: View {
             } else {
                 HStack(spacing: 5) {
                     Text("Navi")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(Color.primary)
+                        .font(.system(size: 14, weight: .bold, design: .rounded))
+                        .foregroundColor(Color.accentNavi)
                     Text("Chatt")
                         .font(.system(size: 14))
                         .foregroundColor(Color.secondary)
@@ -293,34 +280,42 @@ struct PureChatView: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            #if os(macOS)
             .help("Ny chatt")
+            #endif
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
+    }
+
+    @ViewBuilder
+    private func modelMenuButton(model: ClaudeModel, currentModel: ClaudeModel, convID: UUID) -> some View {
+        Button {
+            manager.updateModel(model, for: convID)
+        } label: {
+            HStack {
+                Text(model.displayName)
+                if model == currentModel { Image(systemName: "checkmark") }
+            }
+        }
     }
 
     var chatEmptyState: some View {
         VStack(spacing: 28) {
             Spacer()
             VStack(spacing: 14) {
-                // ChatGPT-green sparkle avatar — larger for empty state
+                // "N" monogram avatar — clean, Claude-style
                 ZStack {
                     Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [Color(red:0.455,green:0.667,blue:0.612), Color(red:0.3,green:0.55,blue:0.5)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(width: 56, height: 56)
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 24, weight: .semibold))
-                        .foregroundColor(.white)
+                        .fill(Color.accentNavi.opacity(0.10))
+                        .frame(width: 64, height: 64)
+                    Text("N")
+                        .font(.system(size: 30, weight: .semibold, design: .rounded))
+                        .foregroundColor(.accentNavi)
                 }
                 VStack(spacing: 5) {
                     Text("Hur kan jag hjälpa dig?")
-                        .font(.system(size: 22, weight: .semibold))
+                        .font(.system(size: 22, weight: .semibold, design: .rounded))
                         .foregroundColor(Color.primary)
                 }
             }
@@ -406,9 +401,9 @@ struct PureChatBubble: View {
                         .font(.system(size: 15.5))
                         .foregroundColor(textPrimary)
                         .lineSpacing(4)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 10)
-                        .background(RoundedRectangle(cornerRadius: 18).fill(userBubbleColor))
+                        .padding(.horizontal, 15)
+                        .padding(.vertical, 11)
+                        .background(RoundedRectangle(cornerRadius: 20).fill(userBubbleColor))
                         .textSelection(.enabled)
                 }
             }
@@ -459,6 +454,11 @@ struct PureChatBubble: View {
                     }
                     .foregroundColor(textMuted)
                     .padding(.top, 2)
+
+                    // Memory context chips — show which facts Navi used in this response
+                    if !message.memoriesInContext.isEmpty {
+                        MemoryChipsRow(facts: message.memoriesInContext)
+                    }
                 }
 
                 Spacer(minLength: 40)
@@ -485,6 +485,52 @@ struct PureChatBubble: View {
                     }
                     #endif
                 }
+            }
+        }
+    }
+}
+
+// MARK: - Memory Chips Row
+
+/// Subtle row of tags showing which user memories Navi referenced in this response.
+struct MemoryChipsRow: View {
+    let facts: [String]
+    @State private var expanded = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) { expanded.toggle() }
+            } label: {
+                HStack(spacing: 5) {
+                    Image(systemName: "brain")
+                        .font(.system(size: 9))
+                    Text(expanded ? "Minnen använda" : "Minnen: \(facts.count)")
+                        .font(.system(size: 10, weight: .medium))
+                    Image(systemName: expanded ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 8, weight: .semibold))
+                }
+                .foregroundColor(.secondary.opacity(0.55))
+            }
+            .buttonStyle(.plain)
+
+            if expanded {
+                FlowLayout(spacing: 4) {
+                    ForEach(facts, id: \.self) { fact in
+                        Text(fact)
+                            .font(.system(size: 10))
+                            .foregroundColor(.secondary.opacity(0.75))
+                            .lineLimit(2)
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 3)
+                            .background(
+                                Capsule()
+                                    .fill(Color.accentNavi.opacity(0.08))
+                                    .overlay(Capsule().strokeBorder(Color.accentNavi.opacity(0.18), lineWidth: 0.5))
+                            )
+                    }
+                }
+                .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
     }
@@ -787,10 +833,10 @@ private struct PureChatInputBar: View {
                     Button(action: onSend) {
                         ZStack {
                             Circle()
-                                .fill(Color.primary)
+                                .fill(Color.accentNavi)
                                 .frame(width: 30, height: 30)
                             RoundedRectangle(cornerRadius: 3)
-                                .fill(Color.chatBackground)
+                                .fill(Color.white)
                                 .frame(width: 10, height: 10)
                         }
                     }
@@ -799,11 +845,11 @@ private struct PureChatInputBar: View {
                     Button { showVoiceMode = true } label: {
                         ZStack {
                             Circle()
-                                .fill(Color.secondary.opacity(0.15))
+                                .fill(Color.accentNavi.opacity(0.12))
                                 .frame(width: 30, height: 30)
                             Image(systemName: "waveform")
                                 .font(.system(size: 14, weight: .medium))
-                                .foregroundColor(Color.secondary.opacity(0.7))
+                                .foregroundColor(Color.accentNavi.opacity(0.7))
                         }
                     }
                     .buttonStyle(.plain)
@@ -811,11 +857,11 @@ private struct PureChatInputBar: View {
                     Button(action: onSend) {
                         ZStack {
                             Circle()
-                                .fill(Color.primary)
+                                .fill(Color.accentNavi)
                                 .frame(width: 30, height: 30)
                             Image(systemName: "arrow.up")
                                 .font(.system(size: 13, weight: .semibold))
-                                .foregroundColor(Color.chatBackground)
+                                .foregroundColor(.white)
                         }
                     }
                     .buttonStyle(.plain)
@@ -825,10 +871,14 @@ private struct PureChatInputBar: View {
             .padding(.vertical, 6)
             .background(
                 RoundedRectangle(cornerRadius: 22)
+                    #if os(iOS)
+                    .fill(.regularMaterial)
+                    #else
                     .fill(Color.userBubble)
+                    #endif
                     .overlay(
                         RoundedRectangle(cornerRadius: 22)
-                            .strokeBorder(Color.inputBorder, lineWidth: 0.5)
+                            .strokeBorder(Color.accentNavi.opacity(0.18), lineWidth: 0.75)
                     )
             )
 

@@ -45,6 +45,12 @@ final class ChatManager: ObservableObject {
             let loadedIDs = Set(loaded.map(\.id))
             let unsaved = conversations.filter { !loadedIDs.contains($0.id) }
             conversations = loaded + unsaved
+            // Re-sync activeConversation from the freshly loaded array
+            // so the model picker and sendMessage() always agree on the same struct
+            if let active = activeConversation,
+               let refreshed = conversations.first(where: { $0.id == active.id }) {
+                activeConversation = refreshed
+            }
         } catch {
             NaviLog.error("ChatManager: kunde inte ladda konversationer", error: error)
         }
@@ -167,6 +173,13 @@ final class ChatManager: ObservableObject {
                 systemPrompt: systemPrompt,
                 onEvent: eventHandler
             )
+        case .openRouter:
+            try await OpenRouterClient.shared.streamChatCompletion(
+                messages: apiMessages,
+                model: conversation.model,
+                systemPrompt: systemPrompt,
+                onEvent: eventHandler
+            )
         }
 
         // Calculate cost
@@ -180,12 +193,16 @@ final class ChatManager: ObservableObject {
             costSEK = 0
         }
 
+        // Find which memories were referenced in this response (zero-cost keyword match)
+        let relevantMems = MemoryManager.shared.relevantMemories(for: fullText, max: 3)
+
         let assistantMsg = PureChatMessage(
             role: .assistant,
             content: ResponseCleaner.clean(fullText),
             costSEK: costSEK,
             model: conversation.model,
-            tokenUsage: finalUsage
+            tokenUsage: finalUsage,
+            memoriesInContext: relevantMems.map(\.fact)
         )
         conversation.messages.append(assistantMsg)
         conversation.updatedAt = Date()
@@ -215,6 +232,33 @@ final class ChatManager: ObservableObject {
                 )
             }
         }
+
+        // Detect reminder / scheduled-task intent in user message (background, silent fail)
+        let sentText = text
+        let convId = conversation.id
+        Task {
+            _ = await ScheduledTaskManager.shared.detectAndSchedule(
+                from: sentText,
+                conversationId: convId
+            )
+        }
+    }
+
+    // MARK: - Update model (persists immediately to prevent iCloud sync race)
+    // Bug: picking a model updates in-memory state but iCloud sync (debounced 1s)
+    // reloads conversations from disk, overwriting the in-memory model change.
+    // Fix: save immediately so any subsequent iCloud reload gets the correct model.
+
+    func updateModel(_ model: ClaudeModel, for conversationID: UUID) {
+        guard let idx = conversations.firstIndex(where: { $0.id == conversationID }) else { return }
+        conversations[idx].model = model
+        // Re-assign activeConversation from the array (value-type copy with updated model)
+        if activeConversation?.id == conversationID {
+            activeConversation = conversations[idx]
+        }
+        // Persist immediately — this is the critical part
+        let conv = conversations[idx]
+        Task { try? await store.save(conv) }
     }
 
     // MARK: - Delete

@@ -26,6 +26,9 @@ struct NaviApp: App {
             PeerSyncEngine.shared.startBrowsing()
             InstructionQueue.shared.startProcessingLoop()
             UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
+            ProactiveNotificationManager.shared.requestPermission()
+            // Check for proactive notification on cold launch (rate-limited to once per 4h)
+            await ProactiveNotificationManager.shared.checkAndNotify()
         }
         #endif
     }
@@ -65,6 +68,8 @@ struct NaviApp: App {
                             PeerSyncEngine.shared.startBrowsing()
                             LocalNetworkClient.shared.startAutoDiscovery()
                             await TaskHandoffManager.shared.checkForCompletions()
+                            // Proactive notification check (rate-limited to once per 4h)
+                            await ProactiveNotificationManager.shared.checkAndNotify()
                         }
                     }
                 }

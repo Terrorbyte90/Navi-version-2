@@ -139,13 +139,12 @@ final class AgentEngine: ObservableObject {
             statusMessage = "Tänker… (steg \(iterationCount)/\(maxIterations))"
 
             do {
-                try await claude.streamMessage(
+                try await ModelRouter.stream(
                     messages: messages,
-                    model: currentProject?.activeModel ?? .sonnet45,
+                    model: currentProject?.activeModel ?? .sonnet46,
                     systemPrompt: MessageBuilder.agentSystemPrompt(for: currentProject),
-                    tools: agentTools,
                     maxTokens: Constants.Agent.maxTokensLarge,
-                    usePromptCaching: true,
+                    tools: agentTools,
                     onEvent: { [weak self] event in
                         self?.handleStreamEvent(
                             event,

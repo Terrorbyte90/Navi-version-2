@@ -143,40 +143,52 @@ extension View {
 // MARK: - Color (system-adaptive, follows system light/dark mode)
 extension Color {
     static var codeBackground: Color {
-        #if os(macOS)
-        Color(NSColor.textBackgroundColor)
-        #else
-        Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor(white: 0.10, alpha: 1) : UIColor(white: 0.95, alpha: 1) })
-        #endif
+        // Always dark regardless of app theme — Claude/VS Code style code blocks
+        Color(red: 0.11, green: 0.11, blue: 0.12)
     }
     static var chatBackground: Color {
         #if os(macOS)
         Color(NSColor.windowBackgroundColor)
         #else
-        Color(UIColor.systemBackground)
+        // Pure white in light mode (Claude iOS style), very dark in dark mode
+        Color(UIColor { $0.userInterfaceStyle == .dark
+            ? UIColor(red: 0.11, green: 0.11, blue: 0.12, alpha: 1)
+            : .white
+        })
         #endif
     }
     static var sidebarBackground: Color {
         #if os(macOS)
         Color(NSColor.controlBackgroundColor)
         #else
-        Color(UIColor.secondarySystemBackground)
+        Color(UIColor { $0.userInterfaceStyle == .dark
+            ? UIColor(white: 0.14, alpha: 1)
+            : UIColor(white: 0.96, alpha: 1)
+        })
         #endif
     }
-    static var accentNavi: Color { Color(red: 0.3, green: 0.6, blue: 1.0) }
+    // Deep purple — Claude-inspired primary accent (#7C5CBF)
+    static var accentNavi: Color { Color(red: 0.486, green: 0.361, blue: 0.749) }
     static var assistantBubble: Color { Color.clear }
     static var userBubble: Color {
         #if os(macOS)
         Color(NSColor.controlColor)
         #else
-        Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor(white: 0.185, alpha: 1) : UIColor(white: 0.92, alpha: 1) })
+        // Subtle purple-tinted gray — adds brand personality while staying readable
+        Color(UIColor { $0.userInterfaceStyle == .dark
+            ? UIColor(red: 0.21, green: 0.195, blue: 0.235, alpha: 1)   // dark purple-tinted
+            : UIColor(red: 0.925, green: 0.915, blue: 0.955, alpha: 1)  // light lavender-gray
+        })
         #endif
     }
     static var inputBackground: Color {
         #if os(macOS)
         Color(NSColor.controlBackgroundColor)
         #else
-        Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor(white: 0.185, alpha: 1) : UIColor(white: 0.93, alpha: 1) })
+        Color(UIColor { $0.userInterfaceStyle == .dark
+            ? UIColor(white: 0.18, alpha: 1)
+            : UIColor(white: 0.94, alpha: 1)
+        })
         #endif
     }
     static var inputBorder: Color {

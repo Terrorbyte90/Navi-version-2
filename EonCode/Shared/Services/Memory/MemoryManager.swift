@@ -27,6 +27,29 @@ final class MemoryManager: ObservableObject {
         }
     }
 
+    // MARK: - Relevant memories for a specific response
+
+    /// Keyword-match a response text against all stored memories.
+    /// Returns up to `max` memories whose fact keywords appear in the text.
+    func relevantMemories(for text: String, max: Int = 3) -> [Memory] {
+        guard !memories.isEmpty else { return [] }
+        let lowText = text.lowercased()
+        // Words to ignore when matching — common Swedish + English stop words
+        let stopWords: Set<String> = [
+            "och", "att", "det", "den", "en", "ett", "är", "som", "på", "av",
+            "vi", "du", "jag", "har", "för", "med", "men", "kan", "till",
+            "the", "and", "that", "this", "with", "for", "from", "not", "but",
+            "you", "are", "have", "was", "were", "been", "will", "would"
+        ]
+        let matched = memories.filter { memory in
+            let words = memory.fact.lowercased()
+                .components(separatedBy: .whitespacesAndNewlines)
+                .filter { $0.count > 3 && !stopWords.contains($0) }
+            return words.contains { word in lowText.contains(word) }
+        }
+        return Array(matched.prefix(max))
+    }
+
     // MARK: - Memory context for system prompt
 
     func memoryContext() -> String {

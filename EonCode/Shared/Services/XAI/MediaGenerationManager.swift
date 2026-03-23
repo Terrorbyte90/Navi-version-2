@@ -16,6 +16,7 @@ final class MediaGenerationManager: ObservableObject {
     @Published var generations: [MediaGeneration] = []
     @Published var balance: XAIBalance?
     @Published var isLoadingBalance = false
+    @Published var showLimitReachedToast = false
 
     private let maxConcurrent = 10
     private var saveDebounceTask: Task<Void, Never>? = nil
@@ -51,6 +52,7 @@ final class MediaGenerationManager: ObservableObject {
     ) async {
         guard canGenerate else {
             NaviLog.warning("MediaGen: max \(maxConcurrent) samtidiga genereringar nått")
+            showLimitToast()
             return
         }
 
@@ -81,7 +83,8 @@ final class MediaGenerationManager: ObservableObject {
                 } else {
                     throw XAIError.invalidResponse
                 }
-                let filename = "\(gen.id.uuidString)\(i > 0 ? "-\(i)" : "").png"
+                // xAI always returns JPEG — use .jpg extension
+                let filename = "\(gen.id.uuidString)\(i > 0 ? "-\(i)" : "").jpg"
 
                 try await saveToICloud(data: imageData, folder: Constants.iCloud.mediaImagesFolder, filename: filename)
 
@@ -105,7 +108,7 @@ final class MediaGenerationManager: ObservableObject {
         }
     }
 
-    // MARK: - Generate Video (xAI Aurora)
+    // MARK: - Generate Video (grok-imagine-video)
 
     func generateVideo(
         prompt: String,
@@ -115,16 +118,22 @@ final class MediaGenerationManager: ObservableObject {
     ) async {
         guard canGenerate else {
             NaviLog.warning("MediaGen: max \(maxConcurrent) samtidiga genereringar nått")
+            showLimitToast()
             return
         }
 
-        // Convert "width:height" ratio to "w:h" aspect ratio string for xAI
-        let aspectRatio = ratio == "1280:720" ? "16:9" : "9:16"
+        // Convert "width:height" pixel ratio → xAI aspect_ratio string
+        let aspectRatio: String
+        switch ratio {
+        case "1280:720":  aspectRatio = "16:9"
+        case "1280:1280": aspectRatio = "1:1"
+        default:          aspectRatio = "9:16"  // "720:1280" and anything else
+        }
 
         var gen = MediaGeneration(
             type: .video,
             prompt: prompt,
-            model: "aurora",
+            model: "grok-imagine-video",
             parameters: MediaParameters(aspectRatio: aspectRatio, duration: duration)
         )
         gen.status = .generating
@@ -294,6 +303,14 @@ final class MediaGenerationManager: ObservableObject {
         }
         return thumbnail.jpegData(compressionQuality: 0.6)
         #endif
+    }
+
+    private func showLimitToast() {
+        showLimitReachedToast = true
+        Task {
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            showLimitReachedToast = false
+        }
     }
 
     private func updateGeneration(_ gen: MediaGeneration) {

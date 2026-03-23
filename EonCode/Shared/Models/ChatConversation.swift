@@ -33,6 +33,7 @@ struct PureChatMessage: Codable, Identifiable {
     let costSEK: Double?
     let model: ClaudeModel?
     let tokenUsage: TokenUsage?
+    var memoriesInContext: [String]   // memory facts that were active when this message was generated
 
     init(
         role: MessageRole,
@@ -40,7 +41,8 @@ struct PureChatMessage: Codable, Identifiable {
         imageData: [Data]? = nil,
         costSEK: Double? = nil,
         model: ClaudeModel? = nil,
-        tokenUsage: TokenUsage? = nil
+        tokenUsage: TokenUsage? = nil,
+        memoriesInContext: [String] = []
     ) {
         self.id = UUID()
         self.role = role
@@ -50,6 +52,7 @@ struct PureChatMessage: Codable, Identifiable {
         self.costSEK = costSEK
         self.model = model
         self.tokenUsage = tokenUsage
+        self.memoriesInContext = memoriesInContext
     }
 
     // Convenience for building API request content

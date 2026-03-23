@@ -1240,23 +1240,14 @@ struct InputBar: View {
 struct AssistantAvatar: View {
     var size: CGFloat = 28
 
-    // ChatGPT-green: #74aa9c
-    private let gptGreen = Color(red: 0.455, green: 0.667, blue: 0.612)
-
     var body: some View {
         ZStack {
             Circle()
-                .fill(
-                    LinearGradient(
-                        colors: [gptGreen, gptGreen.opacity(0.75)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
+                .fill(Color.accentNavi.opacity(0.12))
                 .frame(width: size, height: size)
-            Image(systemName: "sparkles")
-                .font(.system(size: size * 0.42, weight: .semibold))
-                .foregroundColor(.white)
+            Text("N")
+                .font(.system(size: size * 0.48, weight: .semibold, design: .rounded))
+                .foregroundColor(.accentNavi)
         }
     }
 }

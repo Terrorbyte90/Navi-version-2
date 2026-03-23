@@ -11,7 +11,7 @@ final class NaviOrchestrator {
 
     // MARK: - Context awareness
 
-    var activeView: AppSection = .project
+    var activeView: AppSection = .pureChat
     var activeProject: NaviProject?
     var platform: Platform { UIDevice.isMac ? .macOS : .iOS }
     var isConnectedToMac: Bool { DeviceStatusBroadcaster.shared.remoteMacIsOnline }
